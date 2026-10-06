@@ -1,5 +1,7 @@
 # pngfit
 
+[![check](https://github.com/LicaRedMoth/pngfit/actions/workflows/check.yml/badge.svg)](https://github.com/LicaRedMoth/pngfit/actions/workflows/check.yml)
+
 **Make a truecolor PNG, or an animated one, exactly N bytes, with the least visible loss.**
 
 Upload forms have hard limits: Bandcamp takes a cover up to 10 MB, and it serves that file

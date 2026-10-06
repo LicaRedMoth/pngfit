@@ -1,0 +1,114 @@
+# On a version tag (v1.0.0, ...): builds the Windows binary (self-tested on Windows) and the web
+# page from the tagged sources, and attaches them to a draft release with their checksums.
+# The draft is published by hand.
+name: release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - name: Keep line endings as committed
+        shell: pwsh
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@v7
+        with:
+          submodules: true
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            make
+            zip
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-libdeflate
+            mingw-w64-x86_64-zlib
+            mingw-w64-x86_64-python-numpy
+            mingw-w64-x86_64-python-pillow
+      - name: Build
+        run: make windows
+      - name: Self-test
+        env:
+          PYTHONUTF8: '1'
+        run: python tools/selftest.py ./pngfit.exe
+      - name: Package
+        run: |
+          {
+            echo "pngfit.exe is statically linked with the libraries below."
+            echo; echo "==== libdeflate"; cat vendor/libdeflate/COPYING
+            echo; echo "==== zlib"; cat vendor/zlib/LICENSE
+            for d in /mingw64/share/licenses/*winpthread*; do
+              echo; echo "==== winpthreads (mingw-w64)"; cat "$d"/*
+            done
+          } > THIRD-PARTY.txt
+          zip -9 pngfit-windows-x86_64.zip pngfit.exe LICENSE THIRD-PARTY.txt
+      - uses: actions/upload-artifact@v7
+        with:
+          name: windows
+          path: pngfit-windows-x86_64.zip
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: true
+      - uses: mymindstorm/setup-emsdk@v16
+        with:
+          version: 6.0.11
+      - name: Build
+        run: web/build.sh
+      - name: Same bytes as the native build
+        run: web/dev/node_check.sh docs/img/*.png
+      - name: Package
+        run: |
+          {
+            echo "pngfit.wasm and pngfit-st.wasm are built with the libraries below."
+            echo; echo "==== libdeflate"; cat vendor/libdeflate/COPYING
+            echo; echo "==== zlib"; cat vendor/zlib/LICENSE
+          } > web/THIRD-PARTY.txt
+          cp LICENSE web/LICENSE.txt
+          cd web && zip -9 ../pngfit-web.zip index.html app.js worker.js _headers \
+            pngfit.js pngfit.wasm pngfit-st.js pngfit-st.wasm LICENSE.txt THIRD-PARTY.txt
+      - uses: actions/upload-artifact@v7
+        with:
+          name: web
+          path: pngfit-web.zip
+
+  draft:
+    needs: [windows, web]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Name and checksum
+        run: |
+          v=${GITHUB_REF_NAME#v}
+          cd dist
+          mv pngfit-windows-x86_64.zip "pngfit-$v-windows-x86_64.zip"
+          mv pngfit-web.zip "pngfit-$v-web.zip"
+          sha256sum -- * > SHA256SUMS
+          cat SHA256SUMS
+      - name: Draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" dist/* --clobber --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create "$GITHUB_REF_NAME" dist/* --draft --repo "$GITHUB_REPOSITORY" \
+              --title "pngfit ${GITHUB_REF_NAME#v}" \
+              --notes "Windows: \`pngfit-*-windows-x86_64.zip\` (pngfit.exe, self-tested on Windows). Browser version for a static host: \`pngfit-*-web.zip\`. Other systems: build from source, see the README."
+          fi

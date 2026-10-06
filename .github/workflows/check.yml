@@ -1,0 +1,96 @@
+# Builds pngfit on Linux, macOS, Windows and as WebAssembly, and runs the self-test on each.
+name: check
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux:
+    name: Linux (${{ matrix.cc }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        cc: [gcc, clang]
+    steps:
+      - uses: actions/checkout@v7
+      - name: Dependencies
+        run: sudo apt-get update && sudo apt-get install -y libdeflate-dev zlib1g-dev python3-numpy python3-pil
+      - name: Build
+        run: make CC=${{ matrix.cc }}
+      - name: Self-test
+        run: make check
+
+  macos:
+    name: macOS (Apple Silicon)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.x'
+      - name: Dependencies
+        run: |
+          brew install libdeflate
+          python3 -m pip install numpy pillow
+      - name: Build
+        run: make CPPFLAGS="-I$(brew --prefix)/include" LDFLAGS="-flto=auto -L$(brew --prefix)/lib"
+      - name: Self-test
+        run: make check
+
+  windows:
+    name: Windows (MSYS2)
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - name: Keep line endings as committed
+        shell: pwsh
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@v7
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            make
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-libdeflate
+            mingw-w64-x86_64-zlib
+            mingw-w64-x86_64-python-numpy
+            mingw-w64-x86_64-python-pillow
+      - name: Build
+        run: make windows
+      - name: Self-test
+        env:
+          PYTHONUTF8: '1'
+        run: python tools/selftest.py ./pngfit.exe
+      - uses: actions/upload-artifact@v7
+        with:
+          name: pngfit-windows-x86_64
+          path: pngfit.exe
+
+  web:
+    name: WebAssembly
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: true
+      - uses: mymindstorm/setup-emsdk@v16
+        with:
+          version: 6.0.11
+      - name: Build the page
+        run: web/build.sh
+      - name: Same bytes as the native build
+        run: web/dev/node_check.sh docs/img/*.png

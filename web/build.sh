@@ -5,9 +5,8 @@
 #
 # Needs Emscripten (emcc) and libdeflate's sources, linked as a git submodule rather than
 # copied, so an upstream update is one command away:
-#   git submodule add https://github.com/ebiggers/libdeflate vendor/libdeflate   # once
-#   git submodule update --init                                                  # after a clone
-#   git submodule update --remote vendor/libdeflate                              # to update
+#   git submodule update --init                       # after a clone
+#   git submodule update --remote vendor/libdeflate   # to update
 # zlib comes from Emscripten's own port (-sUSE_ZLIB=1).
 set -e
 cd "$(dirname "$0")/.."
