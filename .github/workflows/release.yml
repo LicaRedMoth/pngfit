@@ -48,8 +48,8 @@ jobs:
             echo "pngfit.exe is statically linked with the libraries below."
             echo; echo "==== libdeflate"; cat vendor/libdeflate/COPYING
             echo; echo "==== zlib"; cat vendor/zlib/LICENSE
-            for d in /mingw64/share/licenses/*winpthread*; do
-              echo; echo "==== winpthreads (mingw-w64)"; cat "$d"/*
+            for d in /mingw64/share/licenses/*winpthread*; do  # one of the packages is enough
+              echo; echo "==== winpthreads (mingw-w64)"; cat "$d"/*; break
             done
           } > THIRD-PARTY.txt
           zip -9 pngfit-windows-x86_64.zip pngfit.exe LICENSE THIRD-PARTY.txt
