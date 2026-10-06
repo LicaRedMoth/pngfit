@@ -36,6 +36,11 @@ worker.onmessage = ({ data: m }) => {
   }
 };
 
+worker.onerror = (e) => {
+  $('cores').textContent = 'Could not start pngfit: ' + (e.message || 'the worker failed to load') + '.';
+  $('cores').className = 'hint warn';
+};
+
 function pick(f) {
   if (!f) return;
   f.arrayBuffer().then((buf) => {

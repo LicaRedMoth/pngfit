@@ -3317,7 +3317,7 @@ static int cli_main(int argc, char **argv)
         return 2;
     }
     prog.quiet = o.quiet;
-    prog.on = !o.quiet && stderr_tty();
+    prog.on = !o.quiet && !prog.lines && stderr_tty(); /* a front end reads lines, not a redrawn bar */
     int nfail = 0, nexact = 0, nskip = 0, nother = 0, nmin = 0;
     int nfiles = outdir ? nin : 1;
     int par = o.parallel > 0 ? o.parallel : (outdir ? (nfiles < o.jobs ? nfiles : o.jobs) : 1);
@@ -3329,7 +3329,7 @@ static int cli_main(int argc, char **argv)
         /* several files at once, each with its share of the threads; the per-file log
          * would interleave, so each file reports one line when it is done */
         Batch b = {.fo = o, .in = argv + optind, .n = nfiles, .outdir = outdir, .suffix = suffix,
-                   .quiet = o.quiet, .json = o.json, .bar = !o.quiet && stderr_tty(), .t0 = now(),
+                   .quiet = o.quiet, .json = o.json, .bar = !o.quiet && !prog.lines && stderr_tty(), .t0 = now(),
                    .mu = PTHREAD_MUTEX_INITIALIZER};
         b.fo.jobs = o.jobs / par > 0 ? o.jobs / par : 1;
         prog.quiet = 1;
