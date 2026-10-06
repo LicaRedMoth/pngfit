@@ -1,0 +1,38 @@
+# Maintainer: RedMoth <put your e-mail here before uploading>
+pkgname=pngfit-git
+pkgver=1.0.0.r0.g845a2bc
+pkgrel=1
+pkgdesc='Make a truecolor PNG or APNG exactly N bytes with the least visible loss (development version)'
+arch=('x86_64' 'aarch64')
+url='https://github.com/LicaRedMoth/pngfit'
+license=('MIT')
+depends=('glibc' 'libdeflate' 'zlib')
+makedepends=('git')
+checkdepends=('python' 'python-numpy' 'python-pillow')
+provides=('pngfit')
+conflicts=('pngfit')
+source=("$pkgname::git+$url.git")
+sha256sums=('SKIP')
+
+pkgver() {
+  cd "$pkgname"
+  ( set -o pipefail
+    git describe --long --tags --abbrev=7 2>/dev/null | sed 's/^v//;s/\([^-]*-g\)/r\1/;s/-/./g' ||
+      printf '0.r%s.g%s' "$(git rev-list --count HEAD)" "$(git rev-parse --short=7 HEAD)"
+  )
+}
+
+build() {
+  cd "$pkgname"
+  make
+}
+
+check() {
+  cd "$pkgname"
+  make check
+}
+
+package() {
+  cd "$pkgname"
+  make DESTDIR="$pkgdir" PREFIX=/usr install
+}

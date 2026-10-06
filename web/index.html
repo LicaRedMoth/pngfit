@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>pngfit · a PNG at an exact size</title>
+<meta name="description" content="Shrink a PNG or animated PNG to exactly the number of bytes you need, with the least visible loss. Runs in your browser.">
+<style>
+  :root {
+    --bg: #fafaf9; --panel: #ffffff; --ink: #1b1b1b; --muted: #6b6b6b; --line: #dcdcdc;
+    --accent: #2f6fb5; --accent-ink: #ffffff; --warn: #b03a51; --ok: #3d8b5f;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #151517; --panel: #1e1e21; --ink: #ececec; --muted: #9a9a9a; --line: #34343a;
+            --accent: #5b95d6; --accent-ink: #0d0d0f; --warn: #e07a8e; --ok: #6cc391; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 860px; margin: 0 auto; padding: 32px 16px 48px; }
+  h1 { font-size: 26px; margin: 0 0 4px; letter-spacing: -0.01em; }
+  .lead { color: var(--muted); margin: 0 0 24px; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px; margin-bottom: 16px; }
+  #drop { display: block; border: 2px dashed var(--line); border-radius: 8px; text-align: center; padding: 36px 16px;
+          cursor: pointer; transition: border-color .15s; }
+  #drop.over, #drop:hover { border-color: var(--accent); }
+  #drop input { display: none; }
+  #drop strong { color: var(--accent); }
+  .file { margin-top: 10px; color: var(--muted); font-size: 14px; }
+  .row { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; margin: 8px 0; }
+  label { display: inline-flex; gap: 6px; align-items: center; }
+  input[type=number], select { font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line);
+                               border-radius: 6px; padding: 5px 8px; }
+  input[type=number] { width: 110px; }
+  input.small { width: 64px; }
+  button { font: inherit; font-weight: 600; background: var(--accent); color: var(--accent-ink); border: 0;
+           border-radius: 8px; padding: 9px 22px; cursor: pointer; }
+  button:disabled { opacity: .45; cursor: default; }
+  .hint { color: var(--muted); font-size: 13px; }
+  progress { width: 100%; height: 10px; accent-color: var(--accent); }
+  .phase { display: flex; justify-content: space-between; font-size: 14px; color: var(--muted); margin-bottom: 6px; }
+  pre { max-height: 220px; overflow: auto; font-size: 12px; background: var(--bg); padding: 10px; border-radius: 6px; margin: 8px 0 0; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 14px; }
+  .stat { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+  .stat b { display: block; font-size: 18px; }
+  .stat span { color: var(--muted); font-size: 12px; }
+  .exact { color: var(--ok); } .warn { color: var(--warn); }
+  .compare { position: relative; overflow: hidden; border-radius: 8px; border: 1px solid var(--line); background:
+             repeating-conic-gradient(#8882 0% 25%, transparent 0% 50%) 0 0 / 16px 16px; user-select: none; }
+  .compare img { display: block; width: 100%; height: auto; image-rendering: pixelated; }
+  .compare .after { position: absolute; inset: 0; clip-path: inset(0 0 0 50%); }
+  .compare .handle { position: absolute; top: 0; bottom: 0; left: 50%; width: 2px; background: var(--accent); pointer-events: none; }
+  .compare .tag { position: absolute; top: 8px; font-size: 12px; background: #000a; color: #fff; padding: 2px 8px; border-radius: 4px; }
+  .compare .tag.l { left: 8px; } .compare .tag.r { right: 8px; }
+  #split { width: 100%; margin: 8px 0 0; }
+  .zoomrow { display: flex; gap: 12px; align-items: center; margin-top: 4px; }
+  footer { color: var(--muted); font-size: 13px; margin-top: 28px; }
+  a { color: var(--accent); }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <h1>pngfit</h1>
+  <p class="lead">A PNG or animated PNG at <em>exactly</em> the size you need, with the least visible loss:
+    full resolution, full colour, a standard PNG out. Everything runs in your browser; the image
+    never leaves your computer.</p>
+
+  <div class="panel">
+    <label id="drop">
+      <input id="file" type="file" accept="image/png,image/apng,.png,.apng">
+      <div>Drop a PNG here or <strong>choose one</strong></div>
+      <div class="file" id="fileinfo">8- or 16-bit grey, RGB, RGBA, interlaced or animated</div>
+    </label>
+  </div>
+
+  <div class="panel">
+    <div class="row">
+      <label>Target size
+        <input id="size" type="number" min="0" step="any" value="90">
+        <select id="unit">
+          <option value="%">% of lossless</option>
+          <option value="MB">MB (10⁶ bytes)</option>
+          <option value="MiB">MiB (2²⁰ bytes)</option>
+          <option value="KB">KB</option>
+          <option value="KiB">KiB</option>
+          <option value="">bytes</option>
+        </select>
+      </label>
+      <button id="go" disabled>Fit</button>
+    </div>
+    <div class="row">
+      <label><input type="checkbox" id="cap" checked> never move a pixel by more than
+        <input id="caperr" class="small" type="number" min="0" max="65535" value="1"></label>
+      <label>Metadata
+        <select id="meta">
+          <option value="keep">keep all</option>
+          <option value="meta">keep only the colour profile</option>
+          <option value="none">remove all</option>
+        </select>
+      </label>
+    </div>
+    <div class="row">
+      <label title="Under a fully transparent pixel nobody sees the colour"><input type="checkbox" id="alpha"> colour under transparent pixels is free</label>
+      <label title="libdeflate level 10: same quality on photographs, about 2 dB worse on screenshots"><input type="checkbox" id="fast"> faster (photographs)</label>
+    </div>
+    <div class="hint" id="cores"></div>
+  </div>
+
+  <div class="panel" id="work" hidden>
+    <div class="phase"><span id="phase">starting</span><span id="elapsed"></span></div>
+    <progress id="bar"></progress>
+    <details><summary class="hint">log</summary><pre id="log"></pre></details>
+  </div>
+
+  <div class="panel" id="result" hidden>
+    <div class="stats" id="stats"></div>
+    <div class="compare" id="compare">
+      <img id="before" alt="original">
+      <img id="after" class="after" alt="result">
+      <div class="handle" id="handle"></div>
+      <span class="tag l">original</span><span class="tag r">pngfit</span>
+    </div>
+    <input id="split" type="range" min="0" max="100" value="50" aria-label="compare">
+    <div class="zoomrow">
+      <label class="hint"><input type="checkbox" id="zoom"> 1:1 pixels</label>
+      <a id="download" download><button>Download</button></a>
+    </div>
+  </div>
+
+  <footer>
+    pngfit · MIT · <a href="https://github.com/LicaRedMoth/pngfit">source on GitHub</a> ·
+    exact sizes come from compressing strips of the image separately and stitching the pieces,
+    so the file size is a sum that can be steered to the byte.
+  </footer>
+</main>
+<script src="app.js"></script>
+</body>
+</html>

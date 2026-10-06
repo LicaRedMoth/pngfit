@@ -332,8 +332,8 @@ static void buf_chunk(Buf *b, const char *type, const uint8_t *data, uint32_t le
 /* ------------------------------------------------------------- progress */
 
 typedef struct {
-    int on, quiet;
-    double t0, ts;
+    int on, quiet, lines; /* lines: machine-readable progress for front ends (the web page) */
+    double t0, ts, last_line;
     char label[48], note[64], prefix[96];
     int64_t total, done;
     pthread_mutex_t mu;
@@ -348,6 +348,16 @@ static void fmt_time(char *s, double t)
 
 static void prog_draw_locked(void)
 {
+    if (prog.lines) { /* "@progress label<TAB>done<TAB>total<TAB>seconds", at most 5 a second */
+        double t = now();
+        if (t - prog.last_line >= 0.2 || prog.done == prog.total) {
+            prog.last_line = t;
+            fprintf(stderr, "@progress %s\t%lld\t%lld\t%.1f\n", prog.label, (long long)prog.done,
+                    (long long)prog.total, t - prog.t0);
+            fflush(stderr);
+        }
+        return;
+    }
     if (!prog.on)
         return;
     char line[256], el[16];
@@ -3003,6 +3013,8 @@ static void usage(FILE *f)
           "                        threads allow; each gets jobs/N threads; 1 = one by one)\n"
           "  -q, --quiet           no log, no progress bar\n"
           "      --json            one JSON object per file on stdout\n"
+          "      --progress-lines  progress as '@progress label<TAB>done<TAB>total<TAB>seconds' lines\n"
+          "                        on stderr, for front ends (the web page uses it)\n"
           "  -V, --version\n"
           "  -h, --help\n",
           f);
@@ -3163,9 +3175,14 @@ static void *batch_worker(void *arg)
     return NULL;
 }
 
-int main(int argc, char **argv)
+/* The whole command line, callable more than once in one process (the web page
+ * runs one file after another): getopt and the progress state start afresh. */
+static int cli_main(int argc, char **argv)
 {
-    platform_init(&argc, &argv);
+    optind = 1;
+    prog.on = prog.quiet = prog.lines = 0;
+    prog.prefix[0] = 0;
+    prog.last_line = 0;
     for (int i = 0; i < 256; i++)
         cost_tab[i] = log2(1 + abs(i < 128 ? i : 256 - i));
     Opts o;
@@ -3181,7 +3198,7 @@ int main(int argc, char **argv)
     o.jobs = ncpu();
     const char *outdir = NULL, *suffix = "";
     enum { O_SUFFIX = 256, O_LALPHA, O_FILTER, O_RSW, O_LADDER, O_MASK, O_LEVEL, O_STRIP, O_ROUNDS, O_JSON,
-           O_NOREDUCE, O_ALPHA, O_FAST, O_EXPLORE, O_NOTHIN };
+           O_NOREDUCE, O_ALPHA, O_FAST, O_EXPLORE, O_NOTHIN, O_PLINES };
     o.max_error = -1;
     o.explore_level = 10;
     static const struct option lo[] = {{"size", 1, 0, 's'},          {"outdir", 1, 0, 'o'},
@@ -3197,6 +3214,7 @@ int main(int argc, char **argv)
                                        {"max-error", 1, 0, 'e'},        {"fast", 0, 0, O_FAST},
                                        {"explore-level", 1, 0, O_EXPLORE},
                                        {"no-thin-strips", 0, 0, O_NOTHIN},
+                                       {"progress-lines", 0, 0, O_PLINES},
                                        {"version", 0, 0, 'V'},       {"help", 0, 0, 'h'},
                                        {0, 0, 0, 0}};
     int c, keep_set = 0;
@@ -3268,6 +3286,7 @@ int main(int argc, char **argv)
         case O_FAST: o.level = 10; break;
         case O_EXPLORE: o.explore_level = atoi(optarg); o.explore_set = 1; break;
         case O_NOTHIN: o.no_thin = 1; break;
+        case O_PLINES: prog.lines = 1; break;
         case 'e': {
             char *end;
             long v = strtol(optarg, &end, 10);
@@ -3365,3 +3384,55 @@ int main(int argc, char **argv)
                 "%d failed\n", nfiles, nexact, nskip, nother, nmin, nfail);
     return nfail ? 1 : 0;
 }
+
+int main(int argc, char **argv)
+{
+    platform_init(&argc, &argv);
+    return cli_main(argc, argv);
+}
+
+#ifdef __EMSCRIPTEN__
+/* Web build (web/build.sh): the page's worker calls pngfit_start(); the run happens on
+ * a thread of its own, so the worker stays free to pass progress lines on as they come,
+ * and Module.onDone(exit code) fires when it is over. Files live in Emscripten's FS. */
+#include <emscripten.h>
+
+typedef struct {
+    int argc;
+    char **argv;
+} WebRun;
+
+static void *web_thread(void *p)
+{
+    WebRun *r = p;
+    int rc = cli_main(r->argc, r->argv);
+    for (int i = 0; i < r->argc; i++)
+        free(r->argv[i]);
+    free(r->argv);
+    free(r);
+    MAIN_THREAD_ASYNC_EM_ASM({ if (Module.onDone) Module.onDone($0); }, rc);
+    return NULL;
+}
+
+EMSCRIPTEN_KEEPALIVE int pngfit_start(int argc, char **argv)
+{
+#ifndef __EMSCRIPTEN_PTHREADS__ /* single-threaded fallback build: run here, report at once */
+    int rc = cli_main(argc, argv);
+    MAIN_THREAD_ASYNC_EM_ASM({ if (Module.onDone) Module.onDone($0); }, rc);
+    return 0;
+#endif
+    WebRun *r = xmalloc(sizeof *r);
+    r->argc = argc;
+    r->argv = xmalloc((argc + 1) * sizeof(char *));
+    for (int i = 0; i < argc; i++) { /* the caller frees its copies right away */
+        r->argv[i] = xmalloc(strlen(argv[i]) + 1);
+        strcpy(r->argv[i], argv[i]);
+    }
+    r->argv[argc] = NULL;
+    pthread_t t;
+    if (pthread_create(&t, NULL, web_thread, r))
+        return -1;
+    pthread_detach(t);
+    return 0;
+}
+#endif

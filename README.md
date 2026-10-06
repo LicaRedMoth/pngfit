@@ -249,6 +249,12 @@ not a PNG at all). A 20-frame APNG lands exactly at both targets.
 
 ![Benchmark on synthetic images](docs/img/bench_synthetic.png)
 
+## In the browser
+
+`web/` holds a static page that runs pngfit as WebAssembly on the visitor's own machine, threaded
+where the page is cross-origin isolated; see [web/README.md](web/README.md) for the build and for
+deploying it on a static host.
+
 ## Repository
 
 | Path | |
@@ -260,6 +266,9 @@ not a PNG at all). A 20-frame APNG lands exactly at both targets.
 | `tools/bench.py` | benchmark on a dataset sample: `PNGFIT_DATASET=/path tools/bench.py out.csv` |
 | `tools/rd_data.py`, `tools/charts.py` | the data and charts in this README |
 | `tools/prototype/` | the original Python prototype, and `make_video.py`, which renders the demo video |
+| `web/` | the browser version: page, worker, Emscripten build script |
+| `packaging/aur/` | PKGBUILDs for the AUR: `pngfit` (releases) and `pngfit-git` |
+| `pngfit.1` | the manual page |
 
 ## Limitations
 

@@ -18,3 +18,9 @@ video/
 
 # the built binary
 /pngfit
+
+# web build output (web/build.sh)
+web/pngfit.js
+web/pngfit.wasm
+web/pngfit-st.js
+web/pngfit-st.wasm

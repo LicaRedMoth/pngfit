@@ -1,0 +1,6 @@
+# Cloudflare Pages: cross-origin isolation, so the threaded build can use SharedArrayBuffer.
+# If pngfit lives under a path (redmoth.moe/pngfit/), keep the rule on that path only, since
+# require-corp also blocks cross-origin images and scripts that do not opt in.
+/*
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Embedder-Policy: require-corp
