@@ -26,7 +26,11 @@ A 3000×3000 photo, a 12.12 MB lossless PNG, lands on 10 000 000 bytes in under 
 2011 dual-core laptop, with all its metadata. `-e 1` makes it a promise: no pixel moved by more
 than 1 level out of 255. Any PNG decoder opens the result; nothing about it is non-standard.
 
-<!-- demo video: drag video/pngfit_quality_log_10MB.mp4 into this spot in GitHub's editor -->
+
+
+https://github.com/user-attachments/assets/a7b442ad-b65d-4ba5-b3e1-76cce99d80d9
+
+
 
 ![What each byte buys on a photograph](docs/img/rd_photographic.png)
 
