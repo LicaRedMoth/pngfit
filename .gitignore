@@ -1,0 +1,20 @@
+# build output
+*.so
+*.o
+__pycache__/
+*.pyc
+
+# benchmark runs: results, logs and scratch encodes (file names come from private datasets)
+bench/
+
+# generated media: test encodes, demo frames, rendered videos and their curve caches
+video/
+*.mp4
+*.npy
+
+# any encoded output; example images, if ever committed, go to docs/ explicitly
+*.png
+!docs/**/*.png
+
+# the built binary
+/pngfit

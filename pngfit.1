@@ -1,0 +1,136 @@
+.TH PNGFIT 1 "October 2026" "pngfit 1.0.0" "User Commands"
+.SH NAME
+pngfit \- make a truecolor PNG or APNG exactly N bytes with the least visible loss
+.SH SYNOPSIS
+.B pngfit
+[\fIoptions\fR]
+.B \-s
+.I SIZE
+.I IN.png OUT.png
+.br
+.B pngfit
+[\fIoptions\fR]
+.B \-s
+.I SIZE
+.B \-o
+.I DIR
+.IR IN.png ...
+.SH DESCRIPTION
+.B pngfit
+writes a standard PNG whose size is exactly
+.I SIZE
+bytes. It keeps the full resolution and truecolor, and gives up as little
+precision as it can: PNG filter residuals are rounded to multiples of a step,
+textured pixels first, flat ones last, with the byte budget spread over the image
+by rate\(endistortion optimisation. The exact size comes from compressing strips of
+the image independently and stitching the DEFLATE fragments into one stream, so
+the file size is a plain sum that can be steered to the byte.
+.PP
+Animated PNGs keep every frame and every frame control. 16\-bit images are
+supported. Metadata is kept by default and counted in the budget.
+.SH OPTIONS
+.TP
+.BR \-s ", " \-\-size " " \fISIZE\fR
+The exact output size: bytes (\fB10000000\fR), decimal units (\fB10MB\fR),
+binary units (\fB10MiB\fR), or a percentage of pngfit's own lossless size
+(\fB80%\fR). \fB0\fR means as small as possible. A target below what the image
+can reach is not an error: pngfit warns and writes the smallest file it can make.
+.TP
+.BR \-e ", " \-\-max\-error " " \fIN\fR
+No sample may move by more than \fIN\fR (levels of 255, or of 65535 for 16\-bit
+images), whatever the size. \fB\-e 0\fR is lossless. Default: no cap, best
+average quality.
+.TP
+.BR \-o ", " \-\-outdir " " \fIDIR\fR
+Batch mode: every input is written to \fIDIR\fR under its own name.
+.TP
+.BI \-\-suffix " STR"
+Batch mode: \fIcover.png\fR becomes \fIcoverSTR.png\fR.
+.TP
+.BR \-P ", " \-\-parallel " " \fIN\fR
+Batch mode: encode \fIN\fR files at once (default: as many as the threads allow).
+.TP
+.BR \-x ", " \-\-strip " " \fILIST\fR
+Metadata to drop, comma\-separated: \fBcolor\fR, \fBexif\fR, \fBxmp\fR,
+\fBiptc\fR, \fBtext\fR, \fBphys\fR, \fBtime\fR, \fBother\fR, \fBmeta\fR (all but
+colour), \fBall\fR, or chunk names such as \fBtEXt\fR. Dropping the colour profile
+of a non\-sRGB image changes its colours; pngfit warns.
+.TP
+.BR \-k ", " \-\-keep " " \fILIST\fR
+Keep only the listed metadata (same names, plus \fBnone\fR).
+.TP
+.BR \-p ", " \-\-preserve
+Keep all metadata (the default).
+.TP
+.B \-\-alpha
+Colour under fully transparent pixels is free: no bytes are spent on it. Off by
+default, because some uses read colour under alpha 0.
+.TP
+.B \-\-lossy\-alpha
+Allow rounding in the alpha channel too.
+.TP
+.B \-\-no\-reduce
+Keep the source format even when a smaller one holds the same pixels (opaque
+alpha, grey stored as colour, 16\-bit samples that are 8\-bit values).
+.TP
+.B \-\-fast
+libdeflate level 10: on photographs about three times faster at practically the
+same quality; on screenshots it costs about 2 dB.
+.TP
+.BI \-\-level " N"
+libdeflate level for the final result, 1\(en12 (default 12).
+.TP
+.BI \-\-explore\-level " N"
+Level for the rough part of the search on photographs (default 10).
+.TP
+.BI \-\-filter " N"
+Base PNG filter 0\(en4 (default: probe).
+.TP
+.BI \-\-row\-switch " F"
+A row leaves the base filter only if another is cheaper by fraction \fIF\fR
+(default: probe).
+.TP
+.BI \-\-ladder " L"
+Step ladder: \fBodd\fR (1, 3, 5, ...), \fBall\fR, or a list such as \fB1,3,5,9\fR.
+.TP
+.BI \-\-mask " M"
+Weight errors by local texture (visual masking). Off by default.
+.TP
+.BI \-\-strip\-rows " N"
+Rows per independent strip (default: 128 for photographs, 64 for flat
+synthetic images).
+.TP
+.B \-\-no\-thin\-strips
+No thin landing strips at the bottom of the image.
+.TP
+.BI \-\-rounds " N"
+Rate\(endistortion refinement rounds (default 4).
+.TP
+.BR \-j ", " \-\-jobs " " \fIN\fR
+Worker threads in total (default: all cores).
+.TP
+.BR \-q ", " \-\-quiet
+No log and no progress bar.
+.TP
+.B \-\-json
+One JSON object per file on standard output.
+.TP
+.BR \-V ", " \-\-version
+.TP
+.BR \-h ", " \-\-help
+.SH EXIT STATUS
+0 on success, including targets that could not be met (the smallest possible file
+is written with a warning) and sources already within the target (left untouched,
+nothing written); 1 if any file failed; 2 on a usage error.
+.SH EXAMPLES
+.TP
+pngfit cover.png cover_bandcamp.png \-s 10MB \-e 1
+A 10\|000\|000\-byte cover in which no pixel moved by more than one level.
+.TP
+pngfit \-s 80% \-o out/ *.png
+Every PNG at 80 % of its lossless size, several at once.
+.SH SEE ALSO
+.BR oxipng (1),
+.BR pngquant (1)
+.SH AUTHORS
+RedMoth, with Claude (Anthropic).
