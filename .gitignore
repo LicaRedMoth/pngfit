@@ -1,27 +1,47 @@
 # build output
-*.so
-*.o
-__pycache__/
-*.pyc
-
-# benchmark runs: results, logs and scratch encodes (file names come from private datasets)
-bench/
-
-# generated media: test encodes, demo frames, rendered videos and their curve caches
-video/
-*.mp4
-*.npy
-
-# any encoded output; example images, if ever committed, go to docs/ explicitly
-*.png
-!docs/**/*.png
-
-# the built binary
 /pngfit
 /pngfit.exe
+*.o
+*.so
+*.a
+__pycache__/
+*.pyc
 
 # web build output (web/build.sh)
 web/pngfit.js
 web/pngfit.wasm
 web/pngfit-st.js
 web/pngfit-st.wasm
+
+# AUR test builds (makepkg in packaging/aur/*): sources, build trees, packages
+packaging/aur/*/*/
+packaging/aur/*/*.tar.*
+
+# a run interrupted before its final rename leaves this next to the output
+*.pngfit-tmp
+
+# benchmark runs: results, logs and scratch encodes (file names come from private datasets)
+bench/
+
+# generated media: demo videos and frames, their curve caches
+video/
+*.mp4
+*.webm
+*.mkv
+*.mov
+*.gif
+*.npy
+
+# any encoded output; example images, if ever committed, go to docs/ explicitly
+*.png
+*.apng
+!docs/**/*.png
+
+# editors and file managers
+*~
+*.swp
+.vscode/
+.idea/
+.directory
+.DS_Store
+Thumbs.db

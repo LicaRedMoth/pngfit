@@ -35,7 +35,7 @@ no pixel by more than ±1 at 53.8 dB; JPEG cannot even get there (quality 100 is
 and still moves a pixel by 5 levels), and WebP and AVIF never get below ±27 and ±9. Below about
 65 % the picture flips for the average error: transform codecs suit photographs better than
 prediction does, and at 20 % of the size JPEG and AVIF are 5–8 dB ahead. pngfit's worst pixel stays the
-smallest at every size, though: ±8 at 20 %, where JPEG and AVIF are at ±26 and ±28.
+smallest at every size, though: ±7 at 20 %, where JPEG and AVIF are at ±26 and ±28.
 
 ## How it works
 
@@ -103,6 +103,13 @@ controls intact, in 3.5 GB of memory.
 at once. The 16-bit ladder first rounds only the low bytes, where the error stays below half an
 8-bit level, and climbs into the high bytes only after that. A 16-bit RGB test image at 80 % of
 its lossless size keeps every sample within ±5 of 65535.
+
+**Prior art.** Rounding filter residuals is not new: [lossypng](https://github.com/foobaz/lossypng)
+(Go) quantises the residuals of PNG's Average filter, and its successor
+[pngloss](https://github.com/foobaz/pngloss) (C) adds dithering and a filter choice per row. Both
+take a strength setting and let the size fall where it may. pngfit's part is the size: it lands
+on an exact byte count and spreads those bytes over the image by rate–distortion, and it keeps
+16-bit samples and animation.
 
 ## Install
 
