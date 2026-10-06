@@ -1,6 +1,6 @@
 # Maintainer: RedMoth <put your e-mail here before uploading>
 pkgname=pngfit-git
-pkgver=1.0.0.r0.g845a2bc
+pkgver=1.0.0.r2.g32914b1
 pkgrel=1
 pkgdesc='Make a truecolor PNG or APNG exactly N bytes with the least visible loss (development version)'
 arch=('x86_64' 'aarch64')
