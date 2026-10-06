@@ -79,7 +79,7 @@ jobs:
             echo; echo "==== zlib"; cat vendor/zlib/LICENSE
           } > web/THIRD-PARTY.txt
           cp LICENSE web/LICENSE.txt
-          cd web && zip -9 ../pngfit-web.zip index.html app.js worker.js _headers \
+          cd web && zip -9 ../pngfit-web.zip index.html app.js worker.js _headers ico.png \
             pngfit.js pngfit.wasm pngfit-st.js pngfit-st.wasm LICENSE.txt THIRD-PARTY.txt
       - uses: actions/upload-artifact@v7
         with:

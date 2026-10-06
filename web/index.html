@@ -3,8 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>pngfit · a PNG at an exact size</title>
+<title>L:\REDMOTH.MOE\PNGFIT</title>
+<link rel="icon" href="ico.png" type="image/png">
 <meta name="description" content="Shrink a PNG or animated PNG to exactly the number of bytes you need, with the least visible loss. Runs in your browser.">
+<meta property="og:title" content="L:\REDMOTH.MOE\PNGFIT">
+<meta property="og:description" content="A PNG or animated PNG at exactly the size you need, with the least visible loss. Runs in your browser.">
+<meta property="og:url" content="https://pngfit.redmoth.moe/">
+<meta property="og:type" content="website">
 <style>
   :root {
     --bg: #fafaf9; --panel: #ffffff; --ink: #1b1b1b; --muted: #6b6b6b; --line: #dcdcdc;
@@ -45,13 +50,24 @@
   .stat b { display: block; font-size: 18px; }
   .stat span { color: var(--muted); font-size: 12px; }
   .exact { color: var(--ok); } .warn { color: var(--warn); }
-  .compare { position: relative; overflow: hidden; border-radius: 8px; border: 1px solid var(--line); background:
+  /* the viewer: a stage holding both images, the handle on top; fitted, the stage is as wide as
+     the panel allows and no taller than the screen; at 1:1 it takes the image's own size and the
+     window around it scrolls */
+  .viewer { position: relative; margin: 0 auto; }
+  .compare { overflow: hidden; border-radius: 8px; border: 1px solid var(--line); background:
              repeating-conic-gradient(#8882 0% 25%, transparent 0% 50%) 0 0 / 16px 16px; user-select: none; }
-  .compare img { display: block; width: 100%; height: auto; image-rendering: pixelated; }
-  .compare .after { position: absolute; inset: 0; clip-path: inset(0 0 0 50%); }
-  .compare .handle { position: absolute; top: 0; bottom: 0; left: 50%; width: 2px; background: var(--accent); pointer-events: none; }
-  .compare .tag { position: absolute; top: 8px; font-size: 12px; background: #000a; color: #fff; padding: 2px 8px; border-radius: 4px; }
-  .compare .tag.l { left: 8px; } .compare .tag.r { right: 8px; }
+  .compare.zoomed { overflow: auto; max-height: 75vh; }
+  .stage { position: relative; overflow: hidden; cursor: ew-resize; touch-action: pan-x pan-y; }
+  .compare.zoomed .stage { width: max-content; }
+  .stage img { display: block; width: 100%; height: auto; -webkit-user-drag: none; }
+  .compare.zoomed .stage img { width: auto; max-width: none; }
+  .stage.pixels img { image-rendering: pixelated; }
+  .stage .after { position: absolute; top: 0; left: 0; clip-path: inset(0 0 0 50%); }
+  .stage .handle { position: absolute; top: 0; bottom: 0; left: 50%; width: 2px; margin-left: -1px;
+                   background: var(--accent); pointer-events: none; }
+  .viewer .tag { position: absolute; top: 8px; font-size: 12px; background: #000a; color: #fff; padding: 2px 8px;
+                 border-radius: 4px; pointer-events: none; }
+  .viewer .tag.l { left: 8px; } .viewer .tag.r { right: 8px; }
   #split { width: 100%; margin: 8px 0 0; }
   .zoomrow { display: flex; gap: 12px; align-items: center; margin-top: 4px; }
   footer { color: var(--muted); font-size: 13px; margin-top: 28px; }
@@ -115,13 +131,17 @@
 
   <div class="panel" id="result" hidden>
     <div class="stats" id="stats"></div>
-    <div class="compare" id="compare">
-      <img id="before" alt="original">
-      <img id="after" class="after" alt="result">
-      <div class="handle" id="handle"></div>
+    <div class="viewer" id="viewer">
+      <div class="compare" id="compare">
+        <div class="stage" id="stage">
+          <img id="before" alt="original" draggable="false">
+          <img id="after" class="after" alt="result" draggable="false">
+          <div class="handle" id="handle"></div>
+        </div>
+      </div>
       <span class="tag l">original</span><span class="tag r">pngfit</span>
     </div>
-    <input id="split" type="range" min="0" max="100" value="50" aria-label="compare">
+    <input id="split" type="range" min="0" max="100" step="0.1" value="50" aria-label="compare">
     <div class="zoomrow">
       <label class="hint"><input type="checkbox" id="zoom"> 1:1 pixels</label>
       <a id="download" download><button>Download</button></a>

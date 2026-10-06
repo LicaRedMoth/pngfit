@@ -36,6 +36,7 @@ video/
 *.png
 *.apng
 !docs/**/*.png
+!web/ico.png
 
 # editors and file managers
 *~

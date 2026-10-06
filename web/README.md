@@ -5,7 +5,7 @@ work, the image never leaves the computer.
 
 | File | |
 |---|---|
-| `index.html`, `app.js` | the page |
+| `index.html`, `app.js`, `ico.png` | the page and its icon (redmoth.moe's) |
 | `worker.js` | runs the module off the page's thread, relays progress and the result |
 | `build.sh` | Emscripten build: `pngfit.js/.wasm` (threaded) and `pngfit-st.js/.wasm` (fallback) |
 | `_headers` | Cloudflare Pages headers for cross-origin isolation |
@@ -35,9 +35,13 @@ named `em-pthread` therefore only loads `pngfit.js` and leaves the rest to it.
 
 ## Deploy (Cloudflare Pages)
 
-Upload `index.html`, `app.js`, `worker.js`, `_headers` and the four built files
-(`pngfit.js`, `pngfit.wasm`, `pngfit-st.js`, `pngfit-st.wasm`). If the page lives under a path of a
-larger site, scope the `_headers` rule to that path.
+Every release carries `pngfit-<version>-web.zip`, the whole page built by CI: on Cloudflare,
+Workers & Pages → Create application → Pages → Drag and drop your files, and drop the zip as it
+is; a later version goes in as a new deployment of the same project. The page runs at
+https://pngfit.redmoth.moe/ this way. Built locally instead, upload `index.html`, `app.js`,
+`worker.js`, `_headers`, `ico.png` and the four built files (`pngfit.js`, `pngfit.wasm`,
+`pngfit-st.js`, `pngfit-st.wasm`). If the page lives under a path of a larger site, scope the
+`_headers` rule to that path.
 
 ## Checks
 

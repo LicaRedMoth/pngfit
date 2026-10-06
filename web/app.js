@@ -135,20 +135,63 @@ function finish(m) {
   $('result').hidden = false;
 }
 
+// Fitted, the whole image is on screen: as wide as the panel, no taller than 75 % of the window.
+// At 1:1 it has its own size: the window shrinks around a small image and scrolls over a large
+// one. Either way the viewer is centred and no wider than the image. Pixels are drawn as squares
+// only when enlarged; a reduced image is smoothed.
+function layout() {
+  const img = $('before'), stage = $('stage'), c = $('compare'), viewer = $('viewer');
+  const zoomed = $('zoom').checked, w = img.naturalWidth, h = img.naturalHeight;
+  c.classList.toggle('zoomed', zoomed);
+  viewer.style.maxWidth = '';
+  if (w && h) {
+    if (zoomed) { // the image, its border, and the vertical scrollbar if it has one
+      const bar = c.offsetWidth - c.clientWidth - 2;
+      viewer.style.maxWidth = `${w + 2 + bar}px`;
+    } else {
+      viewer.style.maxWidth = `min(100%, calc(75vh * ${w / h}))`;
+    }
+  }
+  stage.classList.toggle('pixels', zoomed || stage.clientWidth > w);
+}
+
 function setSplit(v) {
   $('after').style.clipPath = `inset(0 0 0 ${v}%)`;
   $('handle').style.left = v + '%';
 }
-$('split').addEventListener('input', (e) => setSplit(e.target.value));
-$('compare').addEventListener('pointermove', (e) => {
-  if (e.buttons !== 1) return;
-  const r = e.currentTarget.getBoundingClientRect();
+
+// at 1:1, bring the boundary into view (and, the first time, the middle of the image)
+function reveal(middle) {
+  const c = $('compare'), stage = $('stage');
+  c.scrollLeft = stage.offsetWidth * $('split').value / 100 - c.clientWidth / 2;
+  if (middle) c.scrollTop = (stage.offsetHeight - c.clientHeight) / 2;
+}
+
+$('before').addEventListener('load', layout);
+window.addEventListener('resize', layout);
+$('split').addEventListener('input', (e) => {
+  setSplit(e.target.value);
+  if ($('zoom').checked) reveal(false);
+});
+// press anywhere on the image and drag: the boundary follows, even outside the panel
+// (scrollbars are not part of the stage, so they still scroll)
+function splitAt(e) {
+  const r = $('stage').getBoundingClientRect(); // the image itself, wherever it is scrolled
   const v = Math.min(100, Math.max(0, ((e.clientX - r.left) / r.width) * 100));
   $('split').value = v;
   setSplit(v);
+}
+$('stage').addEventListener('pointerdown', (e) => {
+  if (e.button !== 0) return;
+  e.preventDefault();
+  $('stage').setPointerCapture(e.pointerId);
+  splitAt(e);
 });
+$('stage').addEventListener('pointermove', (e) => {
+  if ($('stage').hasPointerCapture(e.pointerId)) splitAt(e);
+});
+$('stage').addEventListener('dragstart', (e) => e.preventDefault());
 $('zoom').addEventListener('change', (e) => {
-  // 1:1: the images at their natural size, the panel scrolls
-  for (const id of ['before', 'after']) $(id).style.width = e.target.checked ? 'auto' : '100%';
-  $('compare').style.overflow = e.target.checked ? 'auto' : 'hidden';
+  layout();
+  if (e.target.checked) reveal(true);
 });
