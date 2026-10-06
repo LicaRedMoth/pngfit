@@ -44,7 +44,9 @@ worker.onerror = (e) => {
 function pick(f) {
   if (!f) return;
   f.arrayBuffer().then((buf) => {
+    if (resultUrl && resultUrl !== (file && file.url)) URL.revokeObjectURL(resultUrl);
     if (file && file.url) URL.revokeObjectURL(file.url);
+    resultUrl = null;
     file = { name: f.name, bytes: buf, url: URL.createObjectURL(new Blob([buf], { type: 'image/png' })) };
     const img = new Image();
     img.onload = () => { $('fileinfo').textContent = `${f.name} · ${img.naturalWidth}×${img.naturalHeight} · ${fmtBytes(buf.byteLength)}`; };
@@ -124,7 +126,8 @@ function finish(m) {
     html += stat(j.time.toFixed(1) + ' s', 'time');
   }
   $('stats').innerHTML = html;
-  if (resultUrl) URL.revokeObjectURL(resultUrl);
+  // a run that left the file alone showed the original itself as the result: keep that one
+  if (resultUrl && resultUrl !== file.url) URL.revokeObjectURL(resultUrl);
   resultUrl = m.bytes ? URL.createObjectURL(new Blob([m.bytes], { type: 'image/png' })) : file.url;
   $('before').src = file.url;
   $('after').src = resultUrl;
@@ -167,7 +170,15 @@ function reveal(middle) {
   if (middle) c.scrollTop = (stage.offsetHeight - c.clientHeight) / 2;
 }
 
-$('before').addEventListener('load', layout);
+$('before').addEventListener('load', () => {
+  $('viewer').hidden = false;
+  $('noview').hidden = true;
+  layout();
+});
+$('before').addEventListener('error', () => { // a PNG pngfit reads but this browser cannot show
+  $('viewer').hidden = true;
+  $('noview').hidden = false;
+});
 window.addEventListener('resize', layout);
 $('split').addEventListener('input', (e) => {
   setSplit(e.target.value);
