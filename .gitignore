@@ -18,6 +18,7 @@ video/
 
 # the built binary
 /pngfit
+/pngfit.exe
 
 # web build output (web/build.sh)
 web/pngfit.js

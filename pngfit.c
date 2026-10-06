@@ -28,6 +28,7 @@
 #define __USE_MINGW_ANSI_STDIO 1 /* C99 printf: %zu, %lld */
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include <direct.h>
 #include <io.h>
 #include <shellapi.h>
 #endif
@@ -111,6 +112,25 @@ static int xremove(const char *path)
     return r;
 }
 
+static int xmkdir(const char *path)
+{
+    wchar_t *w = wpath(path);
+    int r = _wmkdir(w);
+    free(w);
+    return r;
+}
+
+static int is_dir(const char *path)
+{
+    wchar_t *w = wpath(path);
+    DWORD a = GetFileAttributesW(w);
+    free(w);
+    return a != INVALID_FILE_ATTRIBUTES && (a & FILE_ATTRIBUTE_DIRECTORY);
+}
+
+#define PATH_SEP '\\'
+static int is_sep(char c) { return c == '/' || c == '\\' || c == ':'; } /* ':' ends a drive, C:x.png */
+
 static int file_id(const char *path, BY_HANDLE_FILE_INFORMATION *fi)
 {
     wchar_t *w = wpath(path);
@@ -183,6 +203,16 @@ static void platform_init(int *argc, char ***argv)
 #define xfopen fopen
 #define xrename rename
 #define xremove remove
+#define xmkdir(p) mkdir(p, 0777)
+
+static int is_dir(const char *path)
+{
+    struct stat st;
+    return !stat(path, &st) && S_ISDIR(st.st_mode);
+}
+
+#define PATH_SEP '/'
+static int is_sep(char c) { return c == '/'; }
 
 static int same_file(const char *a, const char *b)
 {
@@ -3080,11 +3110,39 @@ static void print_json(const char *src, const char *dst, const Result *r)
 
 static void batch_dst(char *dst, size_t n, const char *outdir, const char *src, const char *suffix)
 {
-    const char *bn = strrchr(src, '/');
-    bn = bn ? bn + 1 : src;
+    const char *bn = src;
+    for (const char *c = src; *c; c++)
+        if (is_sep(*c))
+            bn = c + 1;
     const char *dot = strrchr(bn, '.');
     int stem = dot && dot != bn ? (int)(dot - bn) : (int)strlen(bn);
-    snprintf(dst, n, "%s/%.*s%s.png", outdir, stem, bn, suffix);
+    size_t len = strlen(outdir);
+    char sep[2] = {PATH_SEP, 0};
+    if (len && is_sep(outdir[len - 1]))
+        sep[0] = 0;
+    snprintf(dst, n, "%s%s%.*s%s.png", outdir, sep, stem, bn, suffix);
+}
+
+/* mkdir -p: the output directory and any missing parents */
+static int make_dirs(const char *dir)
+{
+    if (is_dir(dir))
+        return 0;
+    char *p = strdup(dir);
+    if (!p)
+        return -1;
+    for (char *c = p + 1; *c; c++) /* parents: failures here are expected (drives, existing ones) */
+        if ((*c == '/' || *c == PATH_SEP) && c[-1] != '/' && c[-1] != PATH_SEP) {
+            char keep = *c;
+            *c = 0;
+            xmkdir(p);
+            *c = keep;
+        }
+    xmkdir(p);
+    int e = errno;
+    free(p);
+    errno = e;
+    return is_dir(dir) ? 0 : -1;
 }
 
 /* one human-readable line per finished file (parallel batch mode) */
@@ -3315,6 +3373,10 @@ static int cli_main(int argc, char **argv)
     if (outdir ? nin < 1 : nin != 2) {
         usage(stderr);
         return 2;
+    }
+    if (outdir && make_dirs(outdir)) {
+        fprintf(stderr, "pngfit: cannot create %s: %s\n", outdir, strerror(errno));
+        return 1;
     }
     prog.quiet = o.quiet;
     prog.on = !o.quiet && !prog.lines && stderr_tty(); /* a front end reads lines, not a redrawn bar */

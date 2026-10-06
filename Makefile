@@ -5,12 +5,16 @@
 #   make install    PREFIX=/usr/local by default, DESTDIR supported
 #   make windows    pngfit.exe, static, from an MSYS2 MINGW64 shell with
 #                   pacman -S make mingw-w64-x86_64-gcc mingw-w64-x86_64-libdeflate mingw-w64-x86_64-zlib
+#   make windows-cross  the same pngfit.exe from Linux: llvm-mingw (github.com/mstorsjo/llvm-mingw)
+#                   on PATH, libdeflate and zlib from the submodules (git submodule update --init)
 CC      ?= cc
 CFLAGS  ?= -O3 -flto=auto -pipe
 CFLAGS  += -std=c11 -Wall -Wextra
 LDFLAGS ?= -flto=auto
 LDLIBS  := -ldeflate -lz -lpthread -lm
 PREFIX  ?= /usr/local
+WINCC   ?= x86_64-w64-mingw32-clang
+ZSRC    := $(addprefix vendor/zlib/,adler32.c crc32.c inflate.c inffast.c inftrees.c uncompr.c zutil.c)
 
 pngfit: pngfit.c
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -o $@ $< $(LDLIBS)
@@ -24,6 +28,10 @@ check: pngfit
 windows:
 	$(CC) -O3 -pipe -std=c11 -Wall -Wextra -static -s -o pngfit.exe pngfit.c -ldeflate -lz -lpthread -lm -lshell32
 
+windows-cross:
+	$(WINCC) -O3 -pipe -std=gnu11 -static -s -Ivendor/libdeflate -Ivendor/zlib -o pngfit.exe pngfit.c \
+		vendor/libdeflate/lib/*.c vendor/libdeflate/lib/x86/*.c $(ZSRC) -lpthread -lshell32
+
 install: pngfit
 	install -Dm755 pngfit $(DESTDIR)$(PREFIX)/bin/pngfit
 	install -Dm644 LICENSE $(DESTDIR)$(PREFIX)/share/licenses/pngfit/LICENSE
@@ -33,4 +41,4 @@ install: pngfit
 clean:
 	rm -f pngfit pngfit.exe
 
-.PHONY: native check windows install clean
+.PHONY: native check windows windows-cross install clean

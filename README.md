@@ -118,10 +118,12 @@ sudo make install       # /usr/local/bin/pngfit
 Anywhere else: a C11 compiler, pthreads, and the libdeflate and zlib development packages.
 One source file, one binary of about 100 KB.
 
-Windows: from an MSYS2 MINGW64 shell, `pacman -S make mingw-w64-x86_64-gcc
-mingw-w64-x86_64-libdeflate mingw-w64-x86_64-zlib`, then `make windows` builds a static
-`pngfit.exe`. The Windows layer (UTF-8 paths through the wide API, replacing rename, file
-identity, console colours) is written but has not been run on Windows yet: reports welcome.
+Windows: `make windows-cross` builds a static `pngfit.exe` on Linux with
+[llvm-mingw](https://github.com/mstorsjo/llvm-mingw) on the `PATH` and the libdeflate and zlib
+submodules (`git submodule update --init`). In an MSYS2 MINGW64 shell, `pacman -S make
+mingw-w64-x86_64-gcc mingw-w64-x86_64-libdeflate mingw-w64-x86_64-zlib` and `make windows` do
+the same. The exe passes the whole self-test under Wine 11 and writes the same bytes as the Linux
+build, non-ASCII paths included; reports from real Windows are welcome.
 
 ## Usage
 
@@ -137,7 +139,7 @@ own lossless size. `0` means "as small as you can".
 |---|---|
 | `-s, --size` | target size, see above |
 | `-e, --max-error N` | no sample may move by more than N, whatever the size (default: no cap, best average) |
-| `-o, --outdir DIR` | batch mode: every input goes to DIR under its own name |
+| `-o, --outdir DIR` | batch mode: every input goes to DIR (created if missing) under its own name |
 | `--suffix STR` | batch mode: `cover.png` becomes `coverSTR.png` |
 | `-x, --strip LIST` | metadata to drop: `color`, `exif`, `xmp`, `iptc`, `text`, `phys`, `time`, `other`, `meta` (all but colour), `all`, or raw chunk names like `tEXt,pHYs` |
 | `-k, --keep LIST` | the other way round: keep only these (same names, plus `none`) |
@@ -260,7 +262,7 @@ deploying it on a static host.
 | Path | |
 |---|---|
 | `pngfit.c` | the tool: PNG reader (8/16-bit, Adam7), quantizer, strip stitching, RD search, writer |
-| `Makefile` | `make`, `make native`, `make check`, `make install`, `make windows` |
+| `Makefile` | `make`, `make native`, `make check`, `make install`, `make windows`, `make windows-cross` |
 | `tools/selftest.py` | `make check`: builds its own test images (all formats, APNG, transparency, broken files), checks every output |
 | `tools/check.py` | independent reference decoder: re-checks size and error of any output; `--apng` compares every frame and frame control |
 | `tools/bench.py` | benchmark on a dataset sample: `PNGFIT_DATASET=/path tools/bench.py out.csv` |
@@ -269,6 +271,7 @@ deploying it on a static host.
 | `web/` | the browser version: page, worker, Emscripten build script |
 | `packaging/aur/` | PKGBUILDs for the AUR: `pngfit` (releases) and `pngfit-git` |
 | `pngfit.1` | the manual page |
+| `vendor/` | libdeflate and zlib as submodules, links to upstream: for the browser and Windows builds only |
 
 ## Limitations
 
