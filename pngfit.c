@@ -2024,6 +2024,10 @@ static int64_t window_(Fit *F, int k, int64_t lo, int64_t hi, int64_t *probes, i
     return -1;
 }
 
+/* candidates per parallel round while landing: a constant, not the thread count, so which
+ * candidates get priced, and so the output file, never depends on -j or the machine */
+#define LAND_BATCH 8
+
 static int64_t single_(Fit *F, int k, int64_t need, int64_t *probes, int64_t *brk_lo, double *brk_g, char *has_brk)
 {
     int64_t P = window_(F, k, need, need, probes, brk_lo, brk_g, has_brk);
@@ -2037,7 +2041,7 @@ static int64_t single_(Fit *F, int k, int64_t need, int64_t *probes, int64_t *br
         if (lo + 1 + d <= F->maxP[k])
             cand[nc++] = lo + 1 + d;
     }
-    int step = 2 * F->jobs;
+    int step = LAND_BATCH;
     Req *cr = amalloc(step * sizeof(Req));
     for (int b0 = 0; b0 < nc; b0 += step) {
         int m = 0;
@@ -2591,8 +2595,8 @@ static int fit_once(const Opts *o, const Png *g, const uint8_t *head, size_t hea
                 if (!has_brk[k] || (round == 0 && ii >= nth))
                     continue;
                 used++;
-                for (int s0 = 1; s0 <= 32 && !landed; s0 += F->jobs) {
-                    int ns = (s0 + F->jobs - 1 <= 32 ? F->jobs : 33 - s0);
+                for (int s0 = 1; s0 <= 32 && !landed; s0 += LAND_BATCH) {
+                    int ns = s0 + LAND_BATCH - 1 <= 32 ? LAND_BATCH : 33 - s0;
                     SeedCtx *sc = amalloc(ns * sizeof(SeedCtx));
                     for (int i = 0; i < ns; i++)
                         sc[i] = (SeedCtx){k, s0 + i, base[k] + slack, brk_lo[k], brk_g[k], -1, 0};

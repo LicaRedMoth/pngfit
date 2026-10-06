@@ -283,6 +283,16 @@ def main():
     check("batch: parallel output identical to one by one",
           all(open(f"{TMP}/out1/b{i}.png", "rb").read() == open(f"{TMP}/out2/b{i}.png", "rb").read() for i in range(4)))
 
+    # more threads than this machine has are fine: the file must not depend on the count
+    same = True
+    for src in ins[:4]:
+        outs = set()
+        for jobs in ("1", "4", "7"):
+            run([src, f"{TMP}/j.png", "-s", "80%", "-j", jobs])
+            outs.add(open(f"{TMP}/j.png", "rb").read())
+        same &= len(outs) == 1
+    check("threads: the same bytes with -j 1, 4 and 7", same)
+
     shutil.rmtree(TMP, ignore_errors=True)
     print(f"\n{'all passed' if not fails else str(len(fails)) + ' FAILED: ' + '; '.join(fails)}")
     sys.exit(1 if fails else 0)
