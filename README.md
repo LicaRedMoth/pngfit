@@ -4,6 +4,9 @@
 
 **Make a truecolor PNG, or an animated one, exactly N bytes, with the least visible loss.**
 
+Try it in the browser at **[pngfit.redmoth.moe](https://pngfit.redmoth.moe/)**: it runs on your own
+machine and the image is never uploaded.
+
 Upload forms have hard limits: Bandcamp takes a cover up to 10 MB, and it serves that file
 to listeners as uploaded. When a lossless PNG is 12 MB, the usual choices are a palette
 (pngquant), a downscale, or JPEG. pngfit takes another route: it keeps the full resolution and
@@ -281,8 +284,9 @@ not a PNG at all). A 20-frame APNG lands exactly at both targets.
 
 ## In the browser
 
-`web/` holds a static page that runs pngfit as WebAssembly on the visitor's own machine, threaded
-where the page is cross-origin isolated; see [web/README.md](web/README.md) for the build and for
+[pngfit.redmoth.moe](https://pngfit.redmoth.moe/) runs pngfit as WebAssembly on the visitor's own
+machine, threaded where the page is cross-origin isolated, and writes the same bytes as the
+command-line tool. Its source is `web/`; see [web/README.md](web/README.md) for the build and for
 deploying it on a static host.
 
 ## Repository
