@@ -119,24 +119,39 @@ on an exact byte count and spreads those bytes over the image by rate–distorti
 
 ## Install
 
-Arch Linux:
+**Windows:** download `pngfit-…-windows-x86_64.zip` from
+[Releases](https://github.com/LicaRedMoth/pngfit/releases), unzip it and run `pngfit.exe` from a
+terminal. That exe is built and self-tested on Windows by CI.
+
+**Arch Linux:** an AUR package is on its way (the AUR is not taking new accounts at the moment).
+Until then the same PKGBUILD builds it from this repository:
 
 ```sh
-sudo pacman -S --needed libdeflate zlib gcc make
+git clone https://github.com/LicaRedMoth/pngfit
+cd pngfit/packaging/aur/pngfit-git && makepkg -si
+```
+
+**From source** (Linux, macOS, other Unix): a C11 compiler, pthreads, and the libdeflate and
+zlib development packages. One source file, one binary of about 100 KB.
+
+```sh
+sudo pacman -S --needed libdeflate zlib gcc make   # Debian/Ubuntu: apt install libdeflate-dev zlib1g-dev
 make                    # or: make native  (tuned for this CPU, stripped)
-make check              # optional self-test, needs python-numpy and python-pillow
+make check              # optional self-test, needs Python with numpy and Pillow
 sudo make install       # /usr/local/bin/pngfit
 ```
 
-Anywhere else: a C11 compiler, pthreads, and the libdeflate and zlib development packages.
-One source file, one binary of about 100 KB.
+macOS with Homebrew: `brew install libdeflate`, then
+`make CPPFLAGS="-I$(brew --prefix)/include" LDFLAGS="-flto=auto -L$(brew --prefix)/lib"`.
 
-Windows: `make windows-cross` builds a static `pngfit.exe` on Linux with
-[llvm-mingw](https://github.com/mstorsjo/llvm-mingw) on the `PATH` and the libdeflate and zlib
-submodules (`git submodule update --init`). In an MSYS2 MINGW64 shell, `pacman -S make
-mingw-w64-x86_64-gcc mingw-w64-x86_64-libdeflate mingw-w64-x86_64-zlib` and `make windows` do
-the same. The exe passes the whole self-test under Wine 11 and writes the same bytes as the Linux
-build, non-ASCII paths included; reports from real Windows are welcome.
+`pngfit.exe` yourself: in an MSYS2 MINGW64 shell, `pacman -S make mingw-w64-x86_64-gcc
+mingw-w64-x86_64-libdeflate mingw-w64-x86_64-zlib` and `make windows`; or on Linux,
+`make windows-cross` with [llvm-mingw](https://github.com/mstorsjo/llvm-mingw) on the `PATH` and
+the submodules checked out (`git submodule update --init`).
+
+CI (the badge at the top) builds every commit and runs the self-test on Linux (gcc and clang),
+macOS on Apple Silicon and Windows, and builds the WebAssembly version, whose output has to match
+the native build byte for byte.
 
 ## Usage
 
@@ -283,6 +298,7 @@ deploying it on a static host.
 | `tools/prototype/` | the original Python prototype, and `make_video.py`, which renders the demo video |
 | `web/` | the browser version: page, worker, Emscripten build script |
 | `packaging/aur/` | PKGBUILDs for the AUR: `pngfit` (releases) and `pngfit-git` |
+| `.github/workflows/` | CI: `check.yml` on every push, `release.yml` builds the release files from a version tag |
 | `pngfit.1` | the manual page |
 | `vendor/` | libdeflate and zlib as submodules, links to upstream: for the browser and Windows builds only |
 
