@@ -135,8 +135,95 @@ function finish(m) {
   $('download').href = resultUrl;
   $('download').download = `${base}_${j.size}B.png`;
   $('download').hidden = !m.bytes;
+  $('diffrow').hidden = !m.bytes;
+  if (!m.bytes) $('diffmode').checked = false;
+  diffFor = null;
   $('result').hidden = false;
+  showDiff();
 }
+
+// The difference view: for every pixel the largest change in any channel, scaled so the
+// largest change in the image is the brightest colour, black where nothing changed. The images
+// are decoded without colour management, so a dropped colour profile does not show up as a
+// change, and pixels transparent in both are left black.
+let diffFor = null; // the result the canvas shows
+const HEAT = (() => { // black, violet, red, orange, pale yellow
+  const stops = [[0, 0, 4], [87, 16, 110], [188, 55, 84], [249, 142, 9], [252, 255, 164]];
+  const lut = new Uint8Array(256 * 3);
+  for (let v = 0; v < 256; v++) {
+    const x = (v / 255) * (stops.length - 1), i = Math.min(stops.length - 2, Math.floor(x)), f = x - i;
+    for (let c = 0; c < 3; c++) lut[v * 3 + c] = Math.round(stops[i][c] + (stops[i + 1][c] - stops[i][c]) * f);
+  }
+  return lut;
+})();
+
+async function pixelsOf(url) {
+  const blob = await (await fetch(url)).blob();
+  const bmp = await createImageBitmap(blob, { colorSpaceConversion: 'none', premultiplyAlpha: 'none' });
+  const c = document.createElement('canvas');
+  c.width = bmp.width;
+  c.height = bmp.height;
+  const g = c.getContext('2d', { willReadFrequently: true });
+  g.drawImage(bmp, 0, 0);
+  bmp.close();
+  return g.getImageData(0, 0, c.width, c.height);
+}
+
+async function drawDiff() {
+  if (diffFor === resultUrl) return;
+  const want = resultUrl;
+  $('legend').textContent = 'working out the difference…';
+  let a, b;
+  try {
+    [a, b] = await Promise.all([pixelsOf(file.url), pixelsOf(want)]);
+  } catch (_) {
+    $('legend').textContent = 'This browser cannot decode the images to compare them.';
+    return;
+  }
+  if (want !== resultUrl) return; // a newer result arrived meanwhile
+  if (a.width !== b.width || a.height !== b.height) {
+    $('legend').textContent = 'The two images differ in size, so there is nothing to compare.';
+    return;
+  }
+  const n = a.width * a.height, d = new Uint8Array(n), A = a.data, B = b.data;
+  let max = 0, changed = 0;
+  for (let i = 0, p = 0; i < n; i++, p += 4) {
+    if (A[p + 3] === 0 && B[p + 3] === 0) continue;
+    const m = Math.max(Math.abs(A[p] - B[p]), Math.abs(A[p + 1] - B[p + 1]),
+                       Math.abs(A[p + 2] - B[p + 2]), Math.abs(A[p + 3] - B[p + 3]));
+    d[i] = m;
+    if (m) changed++;
+    if (m > max) max = m;
+  }
+  const canvas = $('diff');
+  canvas.width = a.width;
+  canvas.height = a.height;
+  const g = canvas.getContext('2d');
+  const out = g.createImageData(a.width, a.height), O = out.data;
+  for (let i = 0, p = 0; i < n; i++, p += 4) {
+    const v = max ? Math.round((d[i] * 255) / max) * 3 : 0;
+    O[p] = HEAT[v];
+    O[p + 1] = HEAT[v + 1];
+    O[p + 2] = HEAT[v + 2];
+    O[p + 3] = 255;
+  }
+  g.putImageData(out, 0, 0);
+  diffFor = want;
+  $('legend').textContent = max === 0
+    ? 'No pixel changed.'
+    : `Black: unchanged. Brightest: the largest change, ±${max} of 255 as the browser shows it. ` +
+      `${((changed / n) * 100).toFixed(1)} % of the pixels changed.`;
+}
+
+async function showDiff() {
+  const on = $('diffmode').checked;
+  $('after').hidden = on;
+  $('diff').hidden = !on;
+  $('tagr').textContent = on ? 'difference' : 'pngfit';
+  $('legend').hidden = !on;
+  if (on) await drawDiff();
+}
+$('diffmode').addEventListener('change', showDiff);
 
 // Fitted, the whole image is on screen: as wide as the panel, no taller than 75 % of the window.
 // At 1:1 it has its own size: the window shrinks around a small image and scrolls over a large
@@ -159,7 +246,7 @@ function layout() {
 }
 
 function setSplit(v) {
-  $('after').style.clipPath = `inset(0 0 0 ${v}%)`;
+  $('after').style.clipPath = $('diff').style.clipPath = `inset(0 0 0 ${v}%)`;
   $('handle').style.left = v + '%';
 }
 

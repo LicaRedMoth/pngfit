@@ -59,9 +59,9 @@
   .compare.zoomed { overflow: auto; max-height: 75vh; }
   .stage { position: relative; overflow: hidden; cursor: ew-resize; touch-action: pan-x pan-y; }
   .compare.zoomed .stage { width: max-content; }
-  .stage img { display: block; width: 100%; height: auto; -webkit-user-drag: none; }
-  .compare.zoomed .stage img { width: auto; max-width: none; }
-  .stage.pixels img { image-rendering: pixelated; }
+  .stage img, .stage canvas { display: block; width: 100%; height: auto; -webkit-user-drag: none; }
+  .compare.zoomed .stage img, .compare.zoomed .stage canvas { width: auto; max-width: none; }
+  .stage.pixels img, .stage.pixels canvas { image-rendering: pixelated; }
   .stage .after { position: absolute; top: 0; left: 0; clip-path: inset(0 0 0 50%); }
   .stage .handle { position: absolute; top: 0; bottom: 0; left: 50%; width: 2px; margin-left: -1px;
                    background: var(--accent); pointer-events: none; }
@@ -138,16 +138,19 @@
         <div class="stage" id="stage">
           <img id="before" alt="original" draggable="false">
           <img id="after" class="after" alt="result" draggable="false">
+          <canvas id="diff" class="after" hidden></canvas>
           <div class="handle" id="handle"></div>
         </div>
       </div>
-      <span class="tag l">original</span><span class="tag r">pngfit</span>
+      <span class="tag l">original</span><span class="tag r" id="tagr">pngfit</span>
     </div>
     <input id="split" type="range" min="0" max="100" step="0.1" value="50" aria-label="compare">
     <div class="zoomrow">
       <label class="hint"><input type="checkbox" id="zoom"> 1:1 pixels</label>
+      <label class="hint" id="diffrow" title="Where pngfit changed the image, and by how much"><input type="checkbox" id="diffmode"> show the difference</label>
       <a id="download" download><button>Download</button></a>
     </div>
+    <p class="hint" id="legend" hidden></p>
   </div>
 
   <footer>
