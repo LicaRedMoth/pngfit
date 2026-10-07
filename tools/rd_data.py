@@ -85,8 +85,8 @@ elif what == "pngfit":
     binary = os.path.join(HERE, os.pardir, "pngfit")
     if len(sys.argv) > 4:   # fractions of the source, e.g. 0.95,0.9,0.8
         targets = [round(float(f) * SRC_BYTES) for f in sys.argv[4].split(",")]
-    else:                   # the Anomie cover: plus Bandcamp's limit
-        targets = [round(f * SRC_BYTES) for f in (0.95, 0.9, 0.7, 0.5, 0.35, 0.2, 0.1, 0.05)] + [10_000_000]
+    else:                   # the Anomie cover: plus Bandcamp's limit, 10 MiB
+        targets = [round(f * SRC_BYTES) for f in (0.95, 0.9, 0.7, 0.5, 0.35, 0.2, 0.1, 0.05)] + [10_485_760]
     tmp = tempfile.mkdtemp()
     for t in sorted(targets, reverse=True):
         dst = os.path.join(tmp, "o.png")

@@ -7,27 +7,27 @@
 Try it in the browser at **[pngfit.redmoth.moe](https://pngfit.redmoth.moe/)**: it runs on your own
 machine and the image is never uploaded.
 
-Upload forms have hard limits: Bandcamp takes a cover up to 10 MB, and it serves that file
-to listeners as uploaded. When a lossless PNG is 12 MB, the usual choices are a palette
-(pngquant), a downscale, or JPEG. pngfit takes another route: it keeps the full resolution and
+Upload forms have hard limits: Bandcamp takes a cover up to 10 MiB (10 485 760 bytes), and it
+serves that file to listeners as uploaded. When a lossless PNG is 12 MB, the usual choices are a
+palette (pngquant), a downscale, or JPEG. pngfit takes another route: it keeps the full resolution and
 full truecolor, gives up the smallest possible amount of precision where the eye cannot see it,
 and writes a valid PNG of **exactly** the size you ask for: not "about", not "under", the very byte.
 
 ```
-$ pngfit cover.png cover_bandcamp.png -s 10MB -e 1
+$ pngfit cover.png cover_bandcamp.png -s 10MiB -e 1
 metadata kept: iCCP[color] 358 B, pHYs[phys] 21 B, tEXt[exif] 2227 B, tEXt[iptc] 102 B, tEXt[xmp] 10330 B; dropped: nothing
 content: photographic (0% flat pixels): 128-row strips, rough search at level 10
 filter: Average, row switch 0.1
-lossless (strips, level 12): 12217081 B, budget 10000000 B
+lossless (strips, level 12): 12217081 B, budget 10485760 B
 …
-slack after RD: 2322 B, landing on the exact byte
-  coarse step in strip 6: 38 B left for the thin strips (2 probes)
-  landed with strips 25+24 (106 probes)
-wrote cover_bandcamp.png: 10000000 B (target 10000000, EXACT)
-PSNR 53.79 dB, max error 1, pixels changed 39.2%
+slack after RD: 1888 B, landing on the exact byte
+  coarse step in strip 16: -195 B left for the thin strips (2 probes)
+  landed in strip 25 alone (96 probes)
+wrote cover_bandcamp.png: 10485760 B (target 10485760, EXACT)
+PSNR 54.90 dB, max error 1, pixels changed 30.3%
 ```
 
-A 3000×3000 photo, a 12.12 MB lossless PNG, lands on 10 000 000 bytes in under three minutes on a
+A 3000×3000 photo, a 12.12 MB lossless PNG, lands on 10 485 760 bytes in about four minutes on a
 2011 dual-core laptop, with all its metadata. `-e 1` makes it a promise: no pixel moved by more
 than 1 level out of 255. Any PNG decoder opens the result; nothing about it is non-standard.
 
@@ -39,8 +39,8 @@ https://github.com/user-attachments/assets/a7b442ad-b65d-4ba5-b3e1-76cce99d80d9
 
 ![What each byte buys on a photograph](docs/img/rd_photographic.png)
 
-Near lossless, pngfit is the better tool. At Bandcamp's 10 MB (82.5 % of the source) it moves
-no pixel by more than ±1 at 53.8 dB; JPEG cannot even get there (quality 100 is 69 % of the size
+Near lossless, pngfit is the better tool. At Bandcamp's 10 MiB (86.5 % of the source) it moves
+no pixel by more than ±1 at 54.9 dB; JPEG cannot even get there (quality 100 is 69 % of the size
 and still moves a pixel by 5 levels), and WebP and AVIF never get below ±27 and ±9. Below about
 65 % the picture flips for the average error: transform codecs suit photographs better than
 prediction does, and at 20 % of the size JPEG and AVIF are 5–8 dB ahead. pngfit's worst pixel stays the

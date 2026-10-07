@@ -130,8 +130,9 @@ is written with a warning) and sources already within the target (left untouched
 nothing written); 1 if any file failed; 2 on a usage error.
 .SH EXAMPLES
 .TP
-pngfit cover.png cover_bandcamp.png \-s 10MB \-e 1
-A 10\|000\|000\-byte cover in which no pixel moved by more than one level.
+pngfit cover.png cover_bandcamp.png \-s 10MiB \-e 1
+A 10\|485\|760\-byte cover (Bandcamp's limit) in which no pixel moved by more
+than one level.
 .TP
 pngfit \-s 80% \-o out/ *.png
 Every PNG at 80 % of its lossless size, several at once.

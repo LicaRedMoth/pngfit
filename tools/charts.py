@@ -77,7 +77,7 @@ def load_rd(name):
     return by
 
 
-MARKS = {10_000_000: "10 MB (Bandcamp)"}
+MARKS = {10_485_760: "10 MiB (Bandcamp)"}
 
 
 def plot_rd(by, title, subtitle, name, marks=None):
