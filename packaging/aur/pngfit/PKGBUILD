@@ -9,7 +9,7 @@ license=('MIT')
 depends=('glibc' 'libdeflate' 'zlib')
 checkdepends=('python' 'python-numpy' 'python-pillow')
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
-sha256sums=('SKIP') # updpkgsums once the v1.1.0 tag is on GitHub
+sha256sums=('21b8144f3e3f718c524c089b80045fbbc188f364d7afeb65f388092beb70ea78')
 
 build() {
   cd "$pkgname-$pkgver"

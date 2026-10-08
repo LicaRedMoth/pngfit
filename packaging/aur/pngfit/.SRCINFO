@@ -13,6 +13,6 @@ pkgbase = pngfit
 	depends = libdeflate
 	depends = zlib
 	source = pngfit-1.1.0.tar.gz::https://github.com/LicaRedMoth/pngfit/archive/refs/tags/v1.1.0.tar.gz
-	sha256sums = SKIP
+	sha256sums = 21b8144f3e3f718c524c089b80045fbbc188f364d7afeb65f388092beb70ea78
 
 pkgname = pngfit
