@@ -1,6 +1,6 @@
 # Maintainer: RedMoth <put your e-mail here before uploading>
 pkgname=pngfit
-pkgver=1.0.0
+pkgver=1.1.0
 pkgrel=1
 pkgdesc='Make a truecolor PNG or APNG exactly N bytes with the least visible loss'
 arch=('x86_64' 'aarch64')
@@ -9,7 +9,7 @@ license=('MIT')
 depends=('glibc' 'libdeflate' 'zlib')
 checkdepends=('python' 'python-numpy' 'python-pillow')
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
-sha256sums=('e90b7044a4c59ed49221b4cb063c8b84cdd6d6526b8cd31438e8c8a8b7c955fe')
+sha256sums=('SKIP') # updpkgsums once the v1.1.0 tag is on GitHub
 
 build() {
   cd "$pkgname-$pkgver"

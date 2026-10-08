@@ -1,6 +1,6 @@
 pkgbase = pngfit
 	pkgdesc = Make a truecolor PNG or APNG exactly N bytes with the least visible loss
-	pkgver = 1.0.0
+	pkgver = 1.1.0
 	pkgrel = 1
 	url = https://github.com/LicaRedMoth/pngfit
 	arch = x86_64
@@ -12,7 +12,7 @@ pkgbase = pngfit
 	depends = glibc
 	depends = libdeflate
 	depends = zlib
-	source = pngfit-1.0.0.tar.gz::https://github.com/LicaRedMoth/pngfit/archive/refs/tags/v1.0.0.tar.gz
-	sha256sums = e90b7044a4c59ed49221b4cb063c8b84cdd6d6526b8cd31438e8c8a8b7c955fe
+	source = pngfit-1.1.0.tar.gz::https://github.com/LicaRedMoth/pngfit/archive/refs/tags/v1.1.0.tar.gz
+	sha256sums = SKIP
 
 pkgname = pngfit
