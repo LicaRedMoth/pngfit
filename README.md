@@ -4,14 +4,19 @@
 
 **Make a truecolor PNG, or an animated one, exactly N bytes, with the least visible loss.**
 
+*Once our limits were floppy disks and modems; now they are upload forms. A picture over the limit
+still gets published, squeezed into a JPEG: blocks on an 8×8 grid, colour bleeding around every
+letter. pngfit is for the age of controlled loss: every byte the limit allows, and not one bit of
+loss beyond what it demands.*
+
 Try it in the browser at **[pngfit.redmoth.moe](https://pngfit.redmoth.moe/)**: it runs on your own
 machine and the image is never uploaded.
 
-Upload forms have hard limits: Bandcamp takes a cover up to 10 MiB (10 485 760 bytes), and it
-serves that file to listeners as uploaded. When a lossless PNG is 12 MB, the usual choices are a
-palette (pngquant), a downscale, or JPEG. pngfit takes another route: it keeps the full resolution and
-full truecolor, gives up the smallest possible amount of precision where the eye cannot see it,
-and writes a valid PNG of **exactly** the size you ask for: not "about", not "under", the very byte.
+Bandcamp, for one, takes a cover of up to 10 MiB (10 485 760 bytes) and serves that very file to
+listeners. When a lossless PNG is 12 MB, the usual choices are a palette (pngquant), a downscale,
+or JPEG. pngfit takes another route: it keeps the full resolution and full truecolor, gives up the
+smallest possible amount of precision where the eye cannot see it, and writes a valid PNG of
+**exactly** the size you ask for: not "about", not "under", the very byte.
 
 ```
 $ pngfit cover.png cover_bandcamp.png -s 10MiB -e 1
@@ -43,7 +48,7 @@ Near lossless, pngfit is the better tool. At Bandcamp's 10 MiB (86.5 % of the so
 no pixel by more than ±1 at 54.9 dB; JPEG cannot even get there (quality 100 is 69 % of the size
 and still moves a pixel by 5 levels), and WebP and AVIF never get below ±27 and ±9. Below about
 65 % the picture flips for the average error: transform codecs suit photographs better than
-prediction does, and at 20 % of the size JPEG and AVIF are 5–8 dB ahead. pngfit's worst pixel stays the
+prediction does, and at 20 % of the size JPEG and AVIF are 4–7 dB ahead. pngfit's worst pixel stays the
 smallest at every size, though: ±7 at 20 %, where JPEG and AVIF are at ±26 and ±28.
 
 ## How it works
@@ -56,6 +61,11 @@ prediction residuals. pngfit rounds those residuals to multiples of a step *q*:
   error never drifts: it stays at most ⌊q/2⌋ per sample;
 * steps climb an odd ladder (1, 3, 5, …): q = 3 still means "±1 at most" but saves far more
   than q = 2;
+* the coarse steps, 9 and up, lean towards the prediction instead of rounding to the nearest
+  multiple: a dead zone, as video encoders use. Fewer, smaller residuals cost fewer bytes than the
+  extra error is worth: at the same size this gains about 1 dB at 20–35 % of a photograph's
+  lossless size (up to 4 dB on smooth ones) and changes nothing near lossless. Under `-e`, and in
+  16-bit images, every step stays nearest and the ⌊q/2⌋ bound holds (`--nearest` turns it off);
 * textured pixels (wood grain, noise, edges) are coarsened first, flat areas last
   (ranked by local 5×5 luma deviation);
 * each row may switch PNG filter when another one is clearly cheaper after rounding;
@@ -186,6 +196,7 @@ own lossless size. `0` means "as small as you can".
 | `--fast` | level 10: on photographs the same quality (−0.02 dB) about 3× faster; on screenshots it costs about 2 dB |
 | `--strip-rows N` | rows per independent strip (default: 128 for photographs, 64 for flat synthetic images) |
 | `--rounds N` | rate–distortion refinement rounds (default 4) |
+| `--nearest` | round every step to the nearest multiple, as 1.0 did (no dead zone on coarse steps) |
 | `-j, --jobs N` | worker threads in total (default: all cores) |
 | `-P, --parallel N` | batch mode: files encoded at once (default: as many as threads allow) |
 | `-q, --quiet` | no log, no progress bar |

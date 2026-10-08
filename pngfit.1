@@ -104,6 +104,11 @@ synthetic images).
 .B \-\-no\-thin\-strips
 No thin landing strips at the bottom of the image.
 .TP
+.B \-\-nearest
+Round every step to the nearest multiple, as pngfit 1.0 did. By default the coarse steps (9 and
+up) lean towards the prediction, a dead zone that buys about 1 dB at a fifth to a third of a
+photograph's lossless size; with \fB\-e\fR, or in 16\-bit images, every step is nearest anyway.
+.TP
 .BI \-\-rounds " N"
 Rate\(endistortion refinement rounds (default 4).
 .TP

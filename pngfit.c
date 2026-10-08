@@ -1120,6 +1120,7 @@ typedef struct {
     int free_alpha;  /* --alpha: colour under alpha 0 costs nothing and counts for nothing */
     double sw;
     uint8_t *qtab; /* L x bpp: step per rung per byte of a pixel */
+    uint8_t *otab; /* L x bpp: its rounding offset (see dead_zone), NEAREST for plain rounding */
     uint8_t *zeros;
     Entry *bk[NB];
     pthread_mutex_t mu;
@@ -1150,6 +1151,19 @@ static inline int predict(int f, int a, int b, int c)
     }
 }
 
+/* Rounding offset of step q: a residual r becomes floor((|r| + offset) / q) steps. Fine steps round
+ * to the nearest multiple (offset (q - 1) / 2, written NEAREST), which keeps the error within
+ * floor(q/2). Coarse steps lean towards the prediction, a dead zone like a video encoder's: at equal
+ * size, about +1 dB at 20-35 % of a photograph's size, nothing near lossless. Steps above 63 (the
+ * extended ladder) stay nearest, as does everything under --max-error or in 16-bit images. */
+#define NEAREST 0xFF
+static uint8_t dead_zone(int q)
+{
+    if (q < 9 || q > 63)
+        return NEAREST;
+    return q < 11 ? 3 : (uint8_t)(7 * q / 20); /* 0.4 q, then 0.35 q */
+}
+
 /* Quantize one row with filter f, predicting from `up` and the row's own
  * already-rounded bytes. Out-of-range rounding keeps the byte exact, so the error
  * bound floor(q/2) always holds. Returns the heuristic cost log2(1+|residual|). */
@@ -1159,7 +1173,7 @@ static double quant_row(const Fit *F, int W, const uint8_t *src, const uint8_t *
     const int bpp = F->bpp, ncol = (F->C - 1) * F->bps; /* with alpha, colour bytes come first */
     double cost = 0;
     for (int x = 0; x < W; x++) {
-        const uint8_t *qt = F->qtab + (lossless ? 0 : rung[x]) * bpp;
+        const uint8_t *qt = F->qtab + (lossless ? 0 : rung[x]) * bpp, *ot = F->otab + (lossless ? 0 : rung[x]) * bpp;
         int inv = 0; /* fully transparent, and allowed to forget its colour */
         if (F->free_alpha && !lossless) {
             const uint8_t *al = src + (size_t)x * bpp + ncol;
@@ -1173,7 +1187,13 @@ static double quant_row(const Fit *F, int W, const uint8_t *src, const uint8_t *
                 if (b < ncol)
                     val = p; /* colour nobody sees: the bare prediction, a zero residual */
             } else if (q > 1) {
-                int rq = q * floordiv(2 * (v - p) + q, 2 * q);
+                int rq;
+                if (ot[b] == NEAREST)
+                    rq = q * floordiv(2 * (v - p) + q, 2 * q);
+                else { /* a coarse step: rounded towards the prediction */
+                    int r = v - p, m = (abs(r) + ot[b]) / q;
+                    rq = r < 0 ? -m * q : m * q;
+                }
                 if (p + rq >= 0 && p + rq <= 255)
                     val = p + rq;
                 else if (F->clamp_above && q > F->clamp_above) {
@@ -1624,6 +1644,7 @@ typedef struct {
     int strip_set, explore_set; /* given on the command line: no automatic choice */
     int no_thin;                /* no thin landing strips (diagnostics) */
     double row_switch, mask;
+    int nearest; /* every step rounds to the nearest multiple, as in 1.0 (diagnostics) */
     int ladder_kind; /* 0 odd, 1 all, 2 custom */
     int ladder[256], nladder;
 } Opts;
@@ -1683,6 +1704,11 @@ static void build_ladder(const Opts *o, const Png *g, Fit *F, int extended)
                 F->qtab[r * g->bpp + 2 * c + 1] = lossy ? ql : 1;
             }
         }
+    /* the dead zone needs no error cap to keep, and 8-bit samples */
+    int dz = o->max_error < 0 && !o->nearest && g->bps == 1;
+    F->otab = amalloc((size_t)F->L * g->bpp);
+    for (int i = 0; i < F->L * g->bpp; i++)
+        F->otab[i] = dz ? dead_zone(F->qtab[i]) : NEAREST;
 }
 
 static void describe_rung(const Fit *F, int r, char *s, size_t n)
@@ -1698,7 +1724,8 @@ static int rung_err(const Fit *F, int r)
 {
     int m = 0;
     for (int c = 0; c < F->C; c++) {
-        int e = F->bps == 1 ? F->qtab[r * F->bpp + c] / 2
+        int q = F->qtab[r * F->bpp + c], o = F->otab[r * F->bpp + c];
+        int e = F->bps == 1 ? (o == NEAREST ? q / 2 : (o > q - 1 - o ? o : q - 1 - o))
                             : F->qtab[r * F->bpp + 2 * c] / 2 * 256 + F->qtab[r * F->bpp + 2 * c + 1] / 2;
         if (e > m)
             m = e;
@@ -2393,7 +2420,7 @@ static int fit_once(const Opts *o, const Png *g, const uint8_t *head, size_t hea
             /* price the chosen allocation at the final level; the levels differ by a few
              * per cent and not evenly across strips, so re-aim the exploration budget by
              * what was measured until the final total sits just under the target */
-            int64_t best_ok = -1, *Pbest = amalloc(K * sizeof(int64_t));
+            int64_t best_ok = -1, *Pbest = amalloc(K * sizeof(int64_t)), *Plast = amalloc(K * sizeof(int64_t));
             for (int it = 0; it < 8; it++) {
                 F->cur = 1;
                 n = 0;
@@ -2413,17 +2440,31 @@ static int fit_once(const Opts *o, const Png *g, const uint8_t *head, size_t hea
                 }
                 if (t1 <= T && T - t1 <= (T / 500 > 4096 ? T / 500 : 4096))
                     break;
-                Tx += (int64_t)((double)(T - t1) * tx / t1);
+                /* the strips' curves are sparse, so a correction as small as the miss can leave the
+                 * allocation as it was: double it until the allocation moves (no compression here,
+                 * only a choice among points already priced) */
+                memcpy(Plast, Pc, K * sizeof(int64_t));
+                int64_t step = (int64_t)((double)(T - t1) * tx / t1);
+                if (step == 0)
+                    step = T > t1 ? 1 : -1;
                 F->cur = 0;
-                best_under(F, Tx, Pc);
+                for (int grow = 0; grow < 24; grow++, step *= 2) {
+                    Tx += step;
+                    best_under(F, Tx, Pc);
+                    if (memcmp(Pc, Plast, K * sizeof(int64_t)))
+                        break;
+                }
             }
             F->cur = 1;
-            if (best_ok < 0) { /* never under: fall back to the most lossy point every strip has priced */
-                for (int k = 0; k < K; k++)
-                    Pbest[k] = F->maxP[k];
-                best_ok = 0;
-                for (int k = 0; k < K; k++)
-                    best_ok += cached(F, k, F->maxP[k], 0).R;
+            if (best_ok < 0) { /* never under: the best mix of the points priced at the final level */
+                best_ok = best_under(F, T, Pbest);
+                if (best_ok > T) { /* or, failing that, the most lossy point of every strip */
+                    for (int k = 0; k < K; k++)
+                        Pbest[k] = F->maxP[k];
+                    best_ok = 0;
+                    for (int k = 0; k < K; k++)
+                        best_ok += cached(F, k, F->maxP[k], 0).R;
+                }
             }
             memcpy(Pc, Pbest, K * sizeof(int64_t));
             tot = best_ok;
@@ -3041,6 +3082,8 @@ static void usage(FILE *f)
           "      --strip-rows N    rows per independent strip (default: 128 for photographs,\n"
           "                        64 for screenshots and other flat, synthetic images)\n"
           "      --no-thin-strips  no thin landing strips at the bottom (slower exact landing)\n"
+          "      --nearest         round every step to the nearest multiple, as pngfit 1.0 did:\n"
+          "                        no dead zone on the coarse steps\n"
           "      --rounds N        rate-distortion refinement rounds (default 4)\n"
           "  -j, --jobs N          worker threads in total (default: all cores)\n"
           "  -P, --parallel N      batch mode: files encoded at once (default: as many as\n"
@@ -3260,7 +3303,7 @@ static int cli_main(int argc, char **argv)
     o.jobs = ncpu();
     const char *outdir = NULL, *suffix = "";
     enum { O_SUFFIX = 256, O_LALPHA, O_FILTER, O_RSW, O_LADDER, O_MASK, O_LEVEL, O_STRIP, O_ROUNDS, O_JSON,
-           O_NOREDUCE, O_ALPHA, O_FAST, O_EXPLORE, O_NOTHIN, O_PLINES };
+           O_NOREDUCE, O_ALPHA, O_FAST, O_EXPLORE, O_NOTHIN, O_PLINES, O_NEAREST };
     o.max_error = -1;
     o.explore_level = 10;
     static const struct option lo[] = {{"size", 1, 0, 's'},          {"outdir", 1, 0, 'o'},
@@ -3275,7 +3318,7 @@ static int cli_main(int argc, char **argv)
                                        {"no-reduce", 0, 0, O_NOREDUCE}, {"alpha", 0, 0, O_ALPHA},
                                        {"max-error", 1, 0, 'e'},        {"fast", 0, 0, O_FAST},
                                        {"explore-level", 1, 0, O_EXPLORE},
-                                       {"no-thin-strips", 0, 0, O_NOTHIN},
+                                       {"no-thin-strips", 0, 0, O_NOTHIN}, {"nearest", 0, 0, O_NEAREST},
                                        {"progress-lines", 0, 0, O_PLINES},
                                        {"version", 0, 0, 'V'},       {"help", 0, 0, 'h'},
                                        {0, 0, 0, 0}};
@@ -3336,6 +3379,7 @@ static int cli_main(int argc, char **argv)
             }
             break;
         case O_MASK: o.mask = atof(optarg); break;
+        case O_NEAREST: o.nearest = 1; break;
         case O_LEVEL: o.level = atoi(optarg); break;
         case O_STRIP: o.strip = atoi(optarg); o.strip_set = 1; break;
         case O_ROUNDS: o.rounds = atoi(optarg); break;
