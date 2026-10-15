@@ -312,8 +312,8 @@
             <input id="size" type="number" min="0" step="any" value="90" />
             <select id="unit">
               <option value="%">% of lossless</option>
-              <option value="MB">MB (10⁶ bytes)</option>
-              <option value="MiB">MiB (2²⁰ bytes)</option>
+              <option value="MB">MB (10^6 bytes)</option>
+              <option value="MiB">MiB (2^20 bytes)</option>
               <option value="KB">KB</option>
               <option value="KiB">KiB</option>
               <option value="">bytes</option>
@@ -384,7 +384,7 @@
       </div>
 
       <footer>
-        pngfit · MIT · <a href="https://github.com/LicaRedMoth/pngfit">source on GitHub</a> · exact sizes come from
+        pngfit, MIT licence, <a href="https://github.com/LicaRedMoth/pngfit">source on GitHub</a>. Exact sizes come from
         compressing strips of the image separately and stitching the pieces, so the file size is a sum that can be
         steered to the byte.
       </footer>

@@ -1350,7 +1350,7 @@ static int cmp_sk(const void *a, const void *b)
 }
 
 /* Seed > 0: shuffle each pixel among its neighbours in the texture order
- * (±0.5 % of the strip). Quality is practically the same, byte sizes are new. */
+ * (+-0.5 % of the strip). Quality is practically the same, byte sizes are new. */
 static const int32_t *seed_rank(const Fit *F, int k, int seed, Work *w)
 {
     int64_t n = F->npx[k];
@@ -1695,7 +1695,7 @@ static void build_ladder(const Opts *o, const Png *g, Fit *F, int extended)
     } else
         for (int q = 1; q <= 255; q += o->ladder_kind == 0 ? 2 : 1)
             st[n++] = q;
-    /* 8-bit: steps up to 63 (±31), on to 255 for targets below that. 16-bit: the low bytes take the
+    /* 8-bit: steps up to 63 (+-31), on to 255 for targets below that. 16-bit: the low bytes take the
      * whole list, then the high bytes climb it again, to 63 or 255. */
     int top = extended ? 255 : 63, E = o->max_error;
     /* --max-error E: a step q moves a byte by at most floor(q/2); never past E */
@@ -2348,7 +2348,7 @@ static int fit_once(const Opts *o, const Png *g, const uint8_t *head, size_t hea
         }
         if (tot_top > T && !extended) {
             logmsg("WARNING: %lld B is below what the standard ladder reaches (%lld B, %s everywhere, error "
-                   "±%d); going on with steps up to 255, where the error is no longer bounded",
+                   "+-%d); going on with steps up to 255, where the error is no longer bounded",
                    (long long)size, (long long)(tot_top + fixed), rd, rung_err(F, F->L - 1));
             rv = NEED_EXTEND;
             goto out;
@@ -2784,7 +2784,7 @@ static void activity(const Png *g, Plane *pl, double mask)
         float v = m2[i] - m[i] * m[i];
         act[i] = sqrtf(v > 0 ? v : 0);
         /* optional perceptual weighting, errors in texture counting less; off by default: at equal size it
-         * lost up to 1.2 dB on photographs and turned ±1 into ±28 on text, whose edges look like texture */
+         * lost up to 1.2 dB on photographs and turned +-1 into +-28 on text, whose edges look like texture */
         wgt[i] = mask > 0 ? (float)(1.0 / ((1.0 + act[i] / mask) * (1.0 + act[i] / mask))) : 1.0f;
     }
     free(m);

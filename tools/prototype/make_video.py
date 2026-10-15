@@ -3,7 +3,7 @@
 
 Exact landing per frame would take hours, so: build the curve size(t) once with the
 real compressor (libdeflate 12, strips, same as pngfit), then for every frame pick t
-by interpolation and quantize (0.5 s). Images are real; sizes in captions are ≈.
+by interpolation and quantize (0.5 s). Images are real; sizes in captions are approximate.
 """
 
 import argparse
@@ -24,7 +24,7 @@ ap = argparse.ArgumentParser()
 ap.add_argument("src")
 ap.add_argument("dst")
 ap.add_argument("--fps", type=int, default=30)
-ap.add_argument("--zoom", default="720,1330", help="x,y of the 280×360 magnified region")
+ap.add_argument("--zoom", default="720,1330", help="x,y of the 280x360 magnified region")
 ap.add_argument("--preview", type=float, help="render one frame at this %% to PNG instead")
 ap.add_argument("--hold", type=float, default=2.5, help="seconds on the original and on the last frame")
 ap.add_argument("--fall", type=float, default=15, help="seconds of the log-scale descent")
@@ -32,7 +32,7 @@ a = ap.parse_args()
 
 img = np.ascontiguousarray(np.asarray(Image.open(a.src).convert("RGB")))
 H, W, C = img.shape
-LADDER = np.arange(1, 256, 2).astype(np.int32)  # q = 1, 3, …, 255
+LADDER = np.arange(1, 256, 2).astype(np.int32)  # q = 1, 3, ..., 255
 lum = img.astype(np.float32) @ np.array([0.299, 0.587, 0.114], np.float32)
 
 m = uniform_filter(lum, 5)
@@ -127,7 +127,7 @@ else:
     S = []
     for i, t in enumerate(T):
         S.append(size(quant(t)[0]))
-        print(f"curve {i + 1}/{len(T)}: t={t:g} → {S[-1]} B ({S[-1] / S[0] * 100:.1f}%)", flush=True)
+        print(f"curve {i + 1}/{len(T)}: t={t:g} -> {S[-1]} B ({S[-1] / S[0] * 100:.1f}%)", flush=True)
     S = np.array(S, float)
     np.save(cache, np.stack([T, S]))
 S0 = S[0]
@@ -167,15 +167,15 @@ def frame(rec, pct, psnr, maxe):
     d.rounded_rectangle([ox, 24, ox + 536, 230], 18, fill=(0, 0, 0, 170))
     if pct >= 100:
         d.text((ox + 20, 34), "original", font=F_BIG, fill=(255, 255, 255))
-        d.text((ox + 22, 120), f"lossless · {S0 / 1e6:.2f} MB", font=F_MED, fill=(220, 220, 220))
-        d.text((ox + 22, 170), "pngfit · Anomie cover", font=F_SM, fill=(170, 170, 170))
+        d.text((ox + 22, 120), f"lossless, {S0 / 1e6:.2f} MB", font=F_MED, fill=(220, 220, 220))
+        d.text((ox + 22, 170), "pngfit, Anomie cover", font=F_SM, fill=(170, 170, 170))
     else:
         txt = f"{pct:.0f}%" if pct >= 10 else f"{pct:.1f}%" if pct >= 1 else f"{pct:.2f}%"
         d.text((ox + 20, 34), txt, font=F_BIG, fill=(255, 255, 255))
         b = pct / 100 * S0
         sz = f"~{b / 1e6:.2f} MB" if b >= 1e6 else f"~{b / 1e3:.0f} KB"
         d.text((ox + 22, 120), f"{sz} of {S0 / 1e6:.2f} MB", font=F_MED, fill=(220, 220, 220))
-        d.text((ox + 22, 170), f"PSNR {psnr:.1f} dB · max error ±{maxe}", font=F_SM, fill=(170, 170, 170))
+        d.text((ox + 22, 170), f"PSNR {psnr:.1f} dB, max error +-{maxe}", font=F_SM, fill=(170, 170, 170))
     # log-scale position bar along the bottom of the overview
     x0, x1, y = 60, 1020, 1032
 
@@ -192,7 +192,7 @@ def frame(rec, pct, psnr, maxe):
             d.text((min(max(pos(p_) - w_ / 2, x0 - 16), x1 + 16 - w_), y + 9), lab, font=F_TINY, fill=(200, 200, 200))
     d.text((x0 - 16, y - 31), "size, log scale", font=F_TINY, fill=(160, 160, 160))
     d.rounded_rectangle([1104, 1020, 1330, 1060], 12, fill=(0, 0, 0, 150))
-    d.text((1120, 1024), "zoom ×3", font=F_SM, fill=(220, 220, 220))
+    d.text((1120, 1024), "zoom x3", font=F_SM, fill=(220, 220, 220))
     return canvas
 
 

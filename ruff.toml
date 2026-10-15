@@ -3,7 +3,7 @@ line-length = 120
 extend-exclude = ["vendor"]
 
 [lint]
-select = ["E", "F", "W", "I", "B"]
+select = ["E", "F", "W", "I", "B", "RUF001", "RUF002", "RUF003"]  # RUF00x: no look-alike Unicode
 ignore = [
     "B905", # zip() without strict=: needs Python 3.10, and the lengths are compared first
 ]

@@ -123,7 +123,7 @@ class Progress:
             return
         if self.total:
             f = min(self.done / self.total, 1)
-            bar = "█" * int(f * 24) + "░" * (24 - int(f * 24))
+            bar = "#" * int(f * 24) + "-" * (24 - int(f * 24))
             s = f"{self.label:<18} {bar} {self.done}/{self.total}"
             if self.done:
                 s += f"  ETA {self._fmt((time.time() - self.ts) / self.done * (self.total - self.done))}"
@@ -220,7 +220,7 @@ def _quant_row(src, up, rung_row, ladder, lossless, f, chmask, rec, res, tab, cl
 
 @njit(nogil=True, cache=True)
 def quant_strip(img, prev, rung, ladder, filt, adaptive, anchor, chmask, wgt, out_f, out_rec, tab, clamp=False):
-    """img h×W×C, prev W×C (row above, already lossless), rung h×W int.
+    """img h x W x C, prev W x C (row above, already lossless), rung h x W int.
     Every row uses the base filter unless another filter's heuristic cost is lower
     by more than `adaptive` (fraction); 0 disables switching. Keeping one filter
     most of the time matters: DEFLATE's matches and Huffman tables like uniform rows.
@@ -271,7 +271,7 @@ class Fitter:
         if alpha_lossless and self.C in (2, 4):
             self.chmask[-1] = False
         self.bounds = [(y, min(y + strip_h, self.H)) for y in range(0, self.H, strip_h)]
-        # visual masking: local texture of luma, 5×5 std
+        # visual masking: local texture of luma, 5x5 std
         f = img.astype(np.float32)
         lum = f[..., :3] @ np.array([0.299, 0.587, 0.114], np.float32) if self.C >= 3 else f[..., 0]
         m = uniform_filter(lum, 5)
@@ -292,7 +292,7 @@ class Fitter:
 
     def strip_rank(self, k, seed):
         """Ranking of strip k. Seed 0 is the plain activity order; other seeds shuffle
-        each pixel among its neighbours in that order (±0.5 % of the strip), so pixels
+        each pixel among its neighbours in that order (+-0.5 % of the strip), so pixels
         of near-equal texture swap places. Quality is practically the same, the byte
         size is not: fresh, independent sizes for the exact-landing search."""
         y0, y1 = self.bounds[k]
@@ -385,7 +385,7 @@ def build_parser():
         "--size",
         type=parse_size,
         required=True,
-        help="exact output size: 10000000, 10MB (=10^7), 10MiB (=10·2^20), or 80%% of the lossless size",
+        help="exact output size: 10000000, 10MB (=10^7), 10MiB (=10*2^20), or 80%% of the lossless size",
     )
     ap.add_argument("--strip", type=int, default=128, help="rows per independent strip")
     ap.add_argument(
@@ -538,7 +538,7 @@ def _fit(a, log, prog, last_try):
 
     log(f"metadata kept: {desc(meta)}; dropped: {desc(dropped)}")
     for t, d in dropped:
-        if t == b"iCCP" and not icc_name(d).lower().startswith("srgb"):  # "Display P3 … sRGB Transfer" is not sRGB
+        if t == b"iCCP" and not icc_name(d).lower().startswith("srgb"):  # "Display P3 ... sRGB Transfer" is not sRGB
             log(f"WARNING: dropping colour profile '{icc_name(d)}': colours will look different")
         elif t in (b"gAMA", b"cHRM", b"cICP"):
             log(f"WARNING: dropping {t.decode()}: colours may look different")
@@ -551,9 +551,9 @@ def _fit(a, log, prog, last_try):
     floor = fixed + -(-raw // 1032)
     if not isinstance(a.size, tuple) and a.size < floor:
         raise FitError(
-            f"{a.size} B is impossible for a {W}×{H} PNG: the container needs {fixed} B "
+            f"{a.size} B is impossible for a {W}x{H} PNG: the container needs {fixed} B "
             f"(signature, IHDR, kept chunks, IDAT/IEND, zlib framing) and DEFLATE cannot code "
-            f"{raw} B of rows in under ~{raw // 1032} B (max ratio ≈1032:1). Absolute floor ≈{floor} B; "
+            f"{raw} B of rows in under ~{raw // 1032} B (max ratio about 1032:1). Absolute floor about {floor} B; "
             f"pngfit's own floor is higher, see the top of its ladder"
         )
     pool = ThreadPoolExecutor(a.jobs)
@@ -620,8 +620,8 @@ def _fit(a, log, prog, last_try):
             pool.shutdown()
             raise FitError(
                 f"target {size} B is out of reach: the smallest this image gets is {tot_top + fixed} B "
-                f"(step q={ladder[top]} everywhere, error up to ±{ladder[top] // 2}); "
-                f"the PNG/DEFLATE floor for {W}×{H} is ≈{floor} B"
+                f"(step q={ladder[top]} everywhere, error up to +-{ladder[top] // 2}); "
+                f"the PNG/DEFLATE floor for {W}x{H} is about {floor} B"
             )
         while True:
             rung += 1

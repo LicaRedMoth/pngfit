@@ -5,7 +5,7 @@
 **Make a truecolor PNG, or an animated one, exactly N bytes, with the least visible loss.**
 
 *Once our limits were floppy disks and modems; now they are upload forms. A picture over the limit
-still gets published, squeezed into a JPEG: blocks on an 8×8 grid, colour bleeding around every
+still gets published, squeezed into a JPEG: blocks on an 8x8 grid, colour bleeding around every
 letter. pngfit is for the age of controlled loss: every byte the limit allows, and not one bit of
 loss beyond what it demands.*
 
@@ -24,7 +24,7 @@ metadata kept: iCCP[color] 358 B, pHYs[phys] 21 B, tEXt[exif] 2227 B, tEXt[iptc]
 content: photographic (0% flat pixels): 128-row strips, rough search at level 10
 filter: Average, row switch 0.1
 lossless (strips, level 12): 12217081 B, budget 10485760 B
-…
+...
 slack after RD: 1888 B, landing on the exact byte
   coarse step in strip 16: -195 B left for the thin strips (2 probes)
   landed in strip 25 alone (96 probes)
@@ -32,7 +32,7 @@ wrote cover_bandcamp.png: 10485760 B (target 10485760, EXACT)
 PSNR 54.90 dB, max error 1, pixels changed 30.3%
 ```
 
-A 3000×3000 photo, a 12.12 MB lossless PNG, lands on 10 485 760 bytes in about four minutes on a
+A 3000x3000 photo, a 12.12 MB lossless PNG, lands on 10 485 760 bytes in about four minutes on a
 2011 dual-core laptop, with all its metadata. `-e 1` makes it a promise: no pixel moved by more
 than 1 level out of 255. Any PNG decoder opens the result; nothing about it is non-standard.
 
@@ -41,11 +41,11 @@ https://github.com/user-attachments/assets/a7b442ad-b65d-4ba5-b3e1-76cce99d80d9
 ![What each byte buys on a photograph](docs/img/rd_photographic.png)
 
 Near lossless, pngfit is the better tool. At Bandcamp's 10 MiB (86.5 % of the source) it moves
-no pixel by more than ±1 at 54.9 dB; JPEG cannot even get there (quality 100 is 69 % of the size
-and still moves a pixel by 5 levels), and WebP and AVIF never get below ±27 and ±9. Below about
+no pixel by more than +-1 at 54.9 dB; JPEG cannot even get there (quality 100 is 69 % of the size
+and still moves a pixel by 5 levels), and WebP and AVIF never get below +-27 and +-9. Below about
 65 % the picture flips for the average error: transform codecs suit photographs better than
 prediction does, and at 20 % of the size JPEG and AVIF are 4 to 7 dB ahead. pngfit's worst pixel
-stays the smallest at every size, though: ±7 at 20 %, where JPEG and AVIF are at ±26 and ±28.
+stays the smallest at every size, though: +-7 at 20 %, where JPEG and AVIF are at +-26 and +-28.
 
 ## How it works
 
@@ -54,16 +54,16 @@ prediction residuals. pngfit rounds those residuals to multiples of a step *q*:
 
 * the residual alphabet shrinks, so DEFLATE codes it in fewer bits;
 * prediction always uses the already-rounded neighbours, exactly what a decoder sees, so the
-  error never drifts: it stays at most ⌊q/2⌋ per sample;
-* steps climb an odd ladder (1, 3, 5, …): q = 3 still means "±1 at most" but saves far more
+  error never drifts: it stays at most floor(q/2) per sample;
+* steps climb an odd ladder (1, 3, 5, ...): q = 3 still means "+-1 at most" but saves far more
   than q = 2;
 * the coarse steps, 9 and up, lean towards the prediction instead of rounding to the nearest
   multiple: a dead zone, as video encoders use. Fewer, smaller residuals cost fewer bytes than the
   extra error is worth: at the same size this gains about 1 dB at 20 to 35 % of a photograph's
   lossless size (up to 4 dB on smooth ones) and changes nothing near lossless. Under `-e`, and in
-  16-bit images, every step stays nearest and the ⌊q/2⌋ bound holds (`--nearest` turns it off);
+  16-bit images, every step stays nearest and the floor(q/2) bound holds (`--nearest` turns it off);
 * textured pixels (wood grain, noise, edges) are coarsened first, flat areas last
-  (ranked by local 5×5 luma deviation);
+  (ranked by local 5x5 luma deviation);
 * each row may switch PNG filter when another one is clearly cheaper after rounding;
 * before any of that, a smaller format that holds the very same pixels is used, as oxipng does:
   an alpha channel that is opaque everywhere is dropped, grey stored as colour becomes grey,
@@ -88,7 +88,7 @@ Landing on an exact byte count needs no model of DEFLATE. It comes from structur
    this: a probe on them costs an eighth of a full strip and moves the size in finer steps, and
    when they cannot take all of the slack, one full strip first takes the bulk. If a single strip
    skips the target (libdeflate re-splits blocks and sizes jump), a *pair* of strips is used:
-   strip *i* takes `slack − x`, strip *j* takes `x`, and sums of two noisy size sets have virtually
+   strip *i* takes `slack - x`, strip *j* takes `x`, and sums of two noisy size sets have virtually
    no gaps (only pairs about as good as the allocation they replace count). Rarer fallbacks:
    reshuffling pixels of equal texture, a wide scan, and finally thinner strips.
 
@@ -102,22 +102,22 @@ another 0.1 to 0.2 %, and that is all it finds.
 
 **What was tried and dropped.** Weighting errors by local texture (visual masking, as video
 encoders do) sounds right and measured wrong: at identical byte counts it lost up to 1.2 dB on
-photographs and turned ±1 into ±28 on screenshots, because the sharp edges of letters look like
+photographs and turned +-1 into +-28 on screenshots, because the sharp edges of letters look like
 texture to it. It is still there as `--mask 4`, off by default.
 
 **Animated PNG.** Every APNG frame is its own zlib stream, so the frames are cut into strips like
 a still and all those strips share one budget: the byte allocation and the exact landing work
 across frames. Frame sizes, offsets, delays, disposal and blending, and the loop count come out
 exactly as they went in, and because each displayed frame is a blend of stored frames, the error
-bound holds on what a viewer shows too. A 20-frame 100×100 animation at 90 % of its size: ±1 on
-every frame, checked after compositing by Pillow and read back by ffmpeg. A 96-frame 1920×1080
-video (38 MB) at 80 % of pngfit's lossless size: exactly 26 131 055 bytes, ±1, 56.4 dB, all frame
+bound holds on what a viewer shows too. A 20-frame 100x100 animation at 90 % of its size: +-1 on
+every frame, checked after compositing by Pillow and read back by ffmpeg. A 96-frame 1920x1080
+video (38 MB) at 80 % of pngfit's lossless size: exactly 26 131 055 bytes, +-1, 56.4 dB, all frame
 controls intact, in 3.5 GB of memory.
 
 **16-bit images.** PNG predicts bytes, not samples, so rounding a high byte would cost 256 levels
 at once. The 16-bit ladder first rounds only the low bytes, where the error stays below half an
 8-bit level, and climbs into the high bytes only after that. A 16-bit RGB test image at 80 % of
-its lossless size keeps every sample within ±5 of 65535.
+its lossless size keeps every sample within +-5 of 65535.
 
 **Prior art.** Rounding filter residuals is not new: [lossypng](https://github.com/foobaz/lossypng)
 (Go) quantises the residuals of PNG's Average filter, and its successor
@@ -128,7 +128,7 @@ on an exact byte count and spreads those bytes over the image by rate-distortion
 
 ## Install
 
-**Windows:** download `pngfit-…-windows-x86_64.zip` from
+**Windows:** download `pngfit-VERSION-windows-x86_64.zip` from
 [Releases](https://github.com/LicaRedMoth/pngfit/releases), unzip it and run `pngfit.exe` from a
 terminal. That exe is built and self-tested on Windows by CI.
 
@@ -166,10 +166,10 @@ the native build byte for byte.
 
 ```sh
 pngfit [options] -s SIZE IN.png OUT.png
-pngfit [options] -s SIZE -o DIR IN.png [IN.png …]      # batch
+pngfit [options] -s SIZE -o DIR IN.png [IN.png ...]      # batch
 ```
 
-`SIZE` is exact: `10000000`, `10MB` (10⁷ bytes), `10MiB` (10·2²⁰ bytes), or `80%` of pngfit's
+`SIZE` is exact: `10000000`, `10MB` (10^7 bytes), `10MiB` (10 * 2^20 bytes), or `80%` of pngfit's
 own lossless size. `0` means "as small as you can".
 
 | Option | Meaning |
@@ -189,7 +189,7 @@ own lossless size. `0` means "as small as you can".
 | `--ladder` | `odd` (default), `all`, or an explicit list like `1,3,5,9` |
 | `--mask M` | weight errors by local texture (visual masking), e.g. `4` (default: off) |
 | `--level N` | libdeflate level (default 12) |
-| `--fast` | level 10: on photographs the same quality (−0.02 dB) about 3× faster; on screenshots it costs about 2 dB |
+| `--fast` | level 10: on photographs the same quality (-0.02 dB) about 3x faster; on screenshots it costs about 2 dB |
 | `--strip-rows N` | rows per independent strip (default: 128 for photographs, 64 for flat synthetic images) |
 | `--rounds N` | rate-distortion refinement rounds (default 4) |
 | `--nearest` | round every step to the nearest multiple, as 1.0 did (no dead zone on coarse steps) |
@@ -208,32 +208,32 @@ file getting its share), keeps going when a file fails, says why, and prints a s
 code is 1 if any file failed. Results are the same byte for byte as one by one. A percent target is
 natural there: `pngfit -s 80% -o out/ *.png`. pngfit refuses to overwrite a source file. Each file
 in flight holds its image several times over in memory, about 40 bytes per pixel (350 MB for a
-3000×3000 photo), so with many cores and huge images lower `-P`.
+3000x3000 photo), so with many cores and huge images lower `-P`.
 
 **Metadata** is kept by default: nothing about a file disappears unless you ask. Whatever is kept
 is counted in the budget, and the file still lands on the exact size; dropping it gives those bytes
 to the pixels (`--strip meta` keeps only the colour profile, which on a 12 MB cover freed 12.7 KB).
-Stripping the colour profile itself (`iCCP`, `sRGB`, `gAMA`, `cHRM`, `cICP`, …) makes a Display P3
-image look different, and pngfit warns when that happens. EXIF, XMP and IPTC hidden in text chunks
-by ImageMagick, GIMP or exiv2 are recognised as such.
+Stripping the colour profile itself (`iCCP`, `sRGB`, `gAMA`, `cHRM`, `cICP` and so on) makes a
+Display P3 image look different, and pngfit warns when that happens. EXIF, XMP and IPTC hidden in
+text chunks by ImageMagick, GIMP or exiv2 are recognised as such.
 
 **Transparent images.** Under a pixel with alpha 0 nobody sees the colour, yet editors leave
 whatever was there, and it costs bytes like any other. `--alpha` lets pngfit store the cheapest
 colour there instead, as `oxipng --alpha` does; the alpha itself stays exact. It is off by default
 because some uses (game textures, premultiplied pipelines) do read colour under alpha 0. On a
 sticker-like test image the visible pixels came out lossless in a third of the bytes that,
-without the flag, still left them at ±2.
+without the flag, still left them at +-2.
 
 **Edge cases**
 
-* The source is already ≤ the target: it is left untouched and nothing is written.
+* The source is already no larger than the target: it is left untouched and nothing is written.
 * pngfit's lossless re-encode fits but the source does not: the lossless file is written,
   smaller than the target (only padding could fill the rest, and padding holds no pixels).
-* A target below what the normal ladder reaches (steps up to 63, error at most ±31) is not
+* A target below what the normal ladder reaches (steps up to 63, error at most +-31) is not
   refused: pngfit warns and carries on with steps up to 255, where the error is no longer bounded.
   If even that cannot get there, it says so and writes the smallest file it can make (one strip,
   every filter tried). A PNG cannot be smaller than its headers plus what DEFLATE needs at its best
-  ratio, about 1032:1, so a 3000×3000 RGB image never goes below ≈26.6 KB whatever the content.
+  ratio, about 1032:1, so a 3000x3000 RGB image never goes below about 26.6 KB whatever the content.
 * No padding, ever. Every byte of the exact size is pixel data and the chunks you kept; when a
   target cannot be hit exactly the file comes out smaller, never filled up.
 
@@ -245,7 +245,7 @@ Screenshots are a different world. Lossy codecs struggle with text and flat colo
 four times the lossless PNG size for 50 to 58 dB, and WebP's lossy mode stops at 36 dB whatever the
 quality, because it always halves the colour resolution and smears coloured text. AVIF at full
 colour is the strong one, 57.7 dB at 66 % of the size. pngfit owns the range just under lossless:
-67.7 dB at 90 % (±2), 62.9 dB at 80 % (±1). Below about 75 % AVIF wins on the average; below about
+67.7 dB at 90 % (+-2), 62.9 dB at 80 % (+-1). Below about 75 % AVIF wins on the average; below about
 40 % pngfit has to reach for steps that wreck flat areas, and an AVIF is the better file to send.
 
 ## Benchmarks
@@ -261,27 +261,27 @@ again by the independent decoder in `tools/check.py` and checked for its size an
 
 | Set | Target | Exact | Mean PSNR | Worst pixel | Median time |
 |---|---|---|---|---|---|
-| Kodak (24 photos, 768×512) | 90 % | 24/24 | 55.19 dB | ±1 | 7 s |
-| | 75 % | 24/24 | 51.21 dB | ±2 | 7 s |
-| CLIC 2020 mobile (8 photos, ~2000×1500) | 90 % | 8/8 | 56.29 dB | ±1 | 37 s |
-| | 75 % | 8/8 | 52.11 dB | ±1 | 45 s |
-| USC-SIPI (12 images) | 90 % | 12/12 | 54.02 dB | ±1 | 1 s |
-| | 75 % | 12/12 | 50.46 dB | ±2 | 1 s |
+| Kodak (24 photos, 768x512) | 90 % | 24/24 | 55.19 dB | +-1 | 7 s |
+| | 75 % | 24/24 | 51.21 dB | +-2 | 7 s |
+| CLIC 2020 mobile (8 photos, ~2000x1500) | 90 % | 8/8 | 56.29 dB | +-1 | 37 s |
+| | 75 % | 8/8 | 52.11 dB | +-1 | 45 s |
+| USC-SIPI (12 images) | 90 % | 12/12 | 54.02 dB | +-1 | 1 s |
+| | 75 % | 12/12 | 50.46 dB | +-2 | 1 s |
 
 **Synthetic images**
 
 | Set | Target | Exact | Mean PSNR | Worst pixel | Median time |
 |---|---|---|---|---|---|
-| Desktop screenshots (16) | 90 % | 16/16 | 59.72 dB | ±17 | 8 s |
-| | 75 % | 16/16 | 50.66 dB | ±12 | 12 s |
-| Wikimedia screenshots (8) | 90 % | 7/8 + 1 lossless | 56.77 dB | ±7 | 42 s |
-| | 75 % | 7/8 + 1 lossless | 45.05 dB | ±31 | 56 s |
+| Desktop screenshots (16) | 90 % | 16/16 | 59.72 dB | +-17 | 8 s |
+| | 75 % | 16/16 | 50.66 dB | +-12 | 12 s |
+| Wikimedia screenshots (8) | 90 % | 7/8 + 1 lossless | 56.77 dB | +-7 | 42 s |
+| | 75 % | 7/8 + 1 lossless | 45.05 dB | +-31 | 56 s |
 
 "Lossless" means the reduced format alone already fit the target. On screenshots the default
 minimises the average error and lets a few pixels go further; `-e N` caps that.
 
 **Robustness.** The whole official PNG test suite (176 files, many broken on purpose): no crash.
-63 land exactly; 13 are 32×32 images whose headers alone leave no room for 90 %, which get the
+63 land exactly; 13 are 32x32 images whose headers alone leave no room for 90 %, which get the
 smallest file and a warning; 100 are refused with a reason (palette, 1- to 4-bit, tRNS, bad CRC,
 not a PNG at all). A 20-frame APNG lands exactly at both targets.
 
@@ -321,8 +321,8 @@ deploying it on a static host.
   images too, since rounding could punch or fill transparent holes. Nothing is ever converted
   behind your back.
 * Slow by design: every candidate is really compressed at libdeflate's level 12, which is where
-  almost all of the time goes. A 3000×3000 photo takes 2 to 4 minutes on a 2011 dual-core. Level 10
-  (`--fast`) still uses libdeflate's near-optimal parser and is about 3× faster; on photographs it
+  almost all of the time goes. A 3000x3000 photo takes 2 to 4 minutes on a 2011 dual-core. Level 10
+  (`--fast`) still uses libdeflate's near-optimal parser and is about 3x faster; on photographs it
   lands within 0.03 dB of level 12, on screenshots it loses about 2 dB. Level 9 and below switch to
   lazy matching and lose 0.8 dB or more even on photographs.
 

@@ -143,7 +143,7 @@ def plot_rd(by, title, subtitle, name, marks=None):
             if marks and b in marks:  # under the blue line, where no other codec runs
                 top = p > 60
                 a1.annotate(
-                    f"{marks[b]}, ±{e}",
+                    f"{marks[b]}, +-{e}",
                     (p, q),
                     textcoords="offset points",
                     xytext=(8, 6) if top else (6, -16),
@@ -158,7 +158,7 @@ def plot_rd(by, title, subtitle, name, marks=None):
     a2.set_yscale("log")
     a2.yaxis.set_major_locator(FixedLocator([1, 2, 5, 10, 20, 50, 100, 255]))
     a2.yaxis.set_minor_locator(NullLocator())
-    a2.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"±{v:g}"))
+    a2.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"+-{v:g}"))
     a2.set_ylabel("worst pixel, levels of 255 (log, lower is better)")
     a2.set_xlabel("size, % of the source PNG (log scale; further right = squeezed harder)")
     a1.legend(frameon=False, fontsize=8, loc="lower left")
@@ -206,7 +206,7 @@ def summarise_bench(path):
 
 
 CLASSES = {
-    "photographic": {"kodak": "Kodak, 768×512", "clic": "CLIC 2020 mobile, ~2000×1500", "usc-sipi": "USC-SIPI"},
+    "photographic": {"kodak": "Kodak, 768x512", "clic": "CLIC 2020 mobile, ~2000x1500", "usc-sipi": "USC-SIPI"},
     "synthetic": {"screenshots": "desktop screenshots", "synthetic": "Wikimedia screenshots"},
 }
 
@@ -247,7 +247,7 @@ def plot_bench(cls):
             )
             ll = f" + {r['lossless']} lossless" if int(r["lossless"]) else ""
             ax.annotate(
-                f"{r['exact']}/{r['encoded']} exact{ll} · worst ±{r['max_error']} · {r['time_median']} s",
+                f"{r['exact']}/{r['encoded']} exact{ll}, worst +-{r['max_error']}, {r['time_median']} s",
                 (float(r["psnr_max"]), y),
                 textcoords="offset points",
                 xytext=(7, -3),
@@ -284,7 +284,7 @@ if __name__ == "__main__":
     plot_rd(
         load_rd("rd_cover.csv"),
         "What each byte buys: a photograph",
-        "Anomie album cover, 3000×3000, 12.12 MB lossless PNG. Solid blue: real pngfit runs on exact byte "
+        "Anomie album cover, 3000x3000, 12.12 MB lossless PNG. Solid blue: real pngfit runs on exact byte "
         "counts; dashed: the demo video.\nJPEG and AVIF at full colour (4:4:4); WebP lossy is always 4:2:0.",
         "rd_photographic.png",
         MARKS,
@@ -292,7 +292,7 @@ if __name__ == "__main__":
     plot_rd(
         load_rd("rd_synthetic.csv"),
         "What each byte buys: a screenshot",
-        "Desktop screenshot from Wikimedia Commons, 1600×900, 161 KB lossless PNG. On text and flat colour "
+        "Desktop screenshot from Wikimedia Commons, 1600x900, 161 KB lossless PNG. On text and flat colour "
         "the lossy codecs\nneed more bytes than lossless PNG for decent quality; pngfit starts from the "
         "lossless file and only goes down.",
         "rd_synthetic.png",

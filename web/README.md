@@ -36,7 +36,7 @@ named `em-pthread` therefore only loads `pngfit.js` and leaves the rest to it.
 ## Deploy (Cloudflare Pages)
 
 Every release carries `pngfit-<version>-web.zip`, the whole page built by CI: on Cloudflare,
-Workers & Pages → Create application → Pages → Drag and drop your files, and drop the zip as it
+Workers & Pages > Create application > Pages > Drag and drop your files, and drop the zip as it
 is; a later version goes in as a new deployment of the same project. The page runs at
 https://pngfit.redmoth.moe/ this way. Built locally instead, upload `index.html`, `app.js`,
 `worker.js`, `_headers`, `ico.png` and the four built files (`pngfit.js`, `pngfit.wasm`,

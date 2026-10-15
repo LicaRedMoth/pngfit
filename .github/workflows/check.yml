@@ -102,7 +102,11 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: C (clang-format, the version the code was formatted with)
-        run: pipx run clang-format==22.1.8 --dry-run --Werror pngfit.c tools/fuzz.c
+        run: pipx run clang-format==22.1.8 --dry-run --Werror pngfit.c tools/fuzz.c web/dev/harness.c
+      - name: Plain ASCII everywhere but vendor/ (no typographic look-alikes)
+        run: |
+          git ls-files -z -- ':!:vendor' | xargs -0 grep -n -I -P '[^\x00-\x7F]' > non-ascii.txt || true
+          if [ -s non-ascii.txt ]; then cat non-ascii.txt; exit 1; fi
       - name: Python (ruff)
         run: |
           pipx run ruff==0.17.0 format --check .

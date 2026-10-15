@@ -11,7 +11,7 @@ let started = 0;
 let timer = 0;
 
 const fmtBytes = (n) => (n >= 1e6 ? (n / 1e6).toFixed(2) + ' MB' : n >= 1e3 ? (n / 1e3).toFixed(1) + ' KB' : n + ' B');
-const group = (n) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+const group = (n) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
 
 worker.onmessage = ({ data: m }) => {
   if (m.type === 'ready') {
@@ -54,11 +54,11 @@ function pick(f) {
     file = { name: f.name, bytes: buf, url: URL.createObjectURL(new Blob([buf], { type: 'image/png' })) };
     const img = new Image();
     img.onload = () => {
-      $('fileinfo').textContent = `${f.name} · ${img.naturalWidth}×${img.naturalHeight} · ${fmtBytes(buf.byteLength)}`;
+      $('fileinfo').textContent = `${f.name}, ${img.naturalWidth}x${img.naturalHeight}, ${fmtBytes(buf.byteLength)}`;
     };
     img.onerror = () => {
       $('fileinfo').textContent =
-        `${f.name} · ${fmtBytes(buf.byteLength)} · the browser cannot show it, pngfit may still read it`;
+        `${f.name}, ${fmtBytes(buf.byteLength)}: the browser cannot show it, pngfit may still read it`;
     };
     img.src = file.url;
     $('go').disabled = false;
@@ -142,11 +142,11 @@ function finish(m) {
     short: [`${group(j.target - j.size)} B short`, 'warn'],
     skipped: ['already fits: nothing to do', 'exact'],
   }[j.status] || [j.status, ''];
-  let html = stat(group(j.size) + ' B', `target ${group(j.target)} B · ${verdict[0]}`, verdict[1]);
+  let html = stat(group(j.size) + ' B', `target ${group(j.target)} B, ${verdict[0]}`, verdict[1]);
   if (j.status !== 'skipped') {
     const peak = j.depth === 16 ? 65535 : 255;
-    html += stat(j.psnr == null ? '∞' : j.psnr.toFixed(2) + ' dB', 'PSNR (higher is better)');
-    html += stat('±' + j.max_error, `worst pixel, levels of ${peak}`);
+    html += stat(j.psnr == null ? 'identical' : j.psnr.toFixed(2) + ' dB', 'PSNR (higher is better)');
+    html += stat('+-' + j.max_error, `worst pixel, levels of ${peak}`);
     html += stat((j.changed * 100).toFixed(1) + ' %', 'pixels changed');
     html += stat(j.time.toFixed(1) + ' s', 'time');
   }
@@ -204,7 +204,7 @@ async function pixelsOf(url) {
 async function drawDiff() {
   if (diffFor === resultUrl) return;
   const want = resultUrl;
-  $('legend').textContent = 'working out the difference…';
+  $('legend').textContent = 'working out the difference...';
   let a, b;
   try {
     [a, b] = await Promise.all([pixelsOf(file.url), pixelsOf(want)]);
@@ -253,7 +253,7 @@ async function drawDiff() {
   $('legend').textContent =
     max === 0
       ? 'No pixel changed.'
-      : `Black: unchanged. Brightest: the largest change, ±${max} of 255 as the browser shows it. ` +
+      : `Black: unchanged. Brightest: the largest change, +-${max} of 255 as the browser shows it. ` +
         `${((changed / n) * 100).toFixed(1)} % of the pixels changed.`;
 }
 
