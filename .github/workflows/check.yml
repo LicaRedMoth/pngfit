@@ -110,7 +110,7 @@ jobs:
       - name: JavaScript and HTML (prettier)
         run: npx --yes prettier@3.9.10 --check .
       - name: Shell (shellcheck)
-        run: shellcheck web/build.sh web/dev/*.sh tools/fuzz.sh
+        run: pipx run --spec shellcheck-py==0.11.0.1 shellcheck web/build.sh web/dev/*.sh tools/fuzz.sh
 
   sanitizers:
     name: Sanitizers and fuzzing

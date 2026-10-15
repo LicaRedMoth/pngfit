@@ -5,7 +5,8 @@ set -e
 cd "$(dirname "$0")/../.."
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
 for variant in threads single; do
-    flag=$([ $variant = single ] && echo -DSTUB_NO_THREADS || true)
+    flag=
+    if [ "$variant" = single ]; then flag=-DSTUB_NO_THREADS; fi
     cc -O2 -std=c11 -Wall -Wextra -D__EMSCRIPTEN__ ${flag:+"$flag"} -Iweb/dev -Dmain=pngfit_native_main -c pngfit.c -o "$tmp/pngfit.o"
     cc -O2 -std=c11 -Wall -Wextra -c web/dev/harness.c -o "$tmp/harness.o"
     cc -o "$tmp/web_entry_$variant" "$tmp/pngfit.o" "$tmp/harness.o" -ldeflate -lz -lpthread -lm
