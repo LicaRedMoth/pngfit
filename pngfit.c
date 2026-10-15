@@ -206,6 +206,7 @@ static void platform_init(int *argc, char ***argv)
         }
         LocalFree(wa);
     }
+
     SetConsoleOutputCP(CP_UTF8);
     HANDLE h = GetStdHandle(STD_ERROR_HANDLE);
     DWORD mode;
@@ -404,10 +405,12 @@ static void prog_draw_locked(void)
         }
         return;
     }
+
     if (!prog.on)
         return;
     char line[256], el[16];
     int n = snprintf(line, sizeof line, "%s%-18s", prog.prefix, prog.label);
+
     if (prog.total > 0) {
         double f = (double)prog.done / prog.total;
         if (f > 1)
@@ -429,6 +432,7 @@ static void prog_draw_locked(void)
     } else if (prog.done) {
         n += snprintf(line + n, sizeof line - n, " %lld probes", (long long)prog.done);
     }
+
     if (prog.note[0])
         n += snprintf(line + n, sizeof line - n, "  %s", prog.note);
     fmt_time(el, now() - prog.t0);
@@ -543,6 +547,7 @@ static void png_parse(Png *g, const uint8_t *d, size_t n)
     g->size = n;
     if (n < 8 || memcmp(d, SIG, 8))
         fail("not a PNG file");
+
     int cap = 16;
     g->ch = amalloc(cap * sizeof(Chunk));
     size_t i = 8;
@@ -559,6 +564,7 @@ static void png_parse(Png *g, const uint8_t *d, size_t n)
         uLong crc = crc32(crc32(0, d + i + 4, 4), c.data, len);
         int bad = crc != be32(d + i + 8 + len);
         i += 12 + (size_t)len;
+
         if (bad) {
             if (isupper((unsigned char)c.type[0])) {
                 char t[5];
@@ -569,6 +575,7 @@ static void png_parse(Png *g, const uint8_t *d, size_t n)
             }
             continue; /* damaged ancillary chunk: drop it, as libpng does */
         }
+
         if (g->nch == cap) {
             Chunk *nc = amalloc(2 * cap * sizeof(Chunk));
             memcpy(nc, g->ch, cap * sizeof(Chunk));
@@ -581,10 +588,12 @@ static void png_parse(Png *g, const uint8_t *d, size_t n)
             break;
         }
     }
+
     if (!g->nch || strcmp(g->ch[0].type, "IHDR") || g->ch[0].len != 13)
         fail("missing IHDR");
     if (!seen_end)
         fail("missing IEND (truncated file?)");
+
     const uint8_t *h = g->ch[0].data;
     const uint32_t w = be32(h), hgt = be32(h + 4); /* checked before they become int */
     if (!w || !hgt || w > (1 << 24) || hgt > (1 << 24))
@@ -596,6 +605,7 @@ static void png_parse(Png *g, const uint8_t *d, size_t n)
     g->interlace = h[12];
     if (h[10] || h[11] || g->interlace > 1)
         fail("unknown compression, filter or interlace method");
+
     switch (g->ctype) {
     case 0:
         g->C = 1;
@@ -614,6 +624,7 @@ static void png_parse(Png *g, const uint8_t *d, size_t n)
     default:
         fail("bad colour type %d", g->ctype);
     }
+
     if (g->depth != 8 && g->depth != 16)
         fail("bit depth %d is not supported (8 or 16)", g->depth);
     g->bps = g->depth / 8;
@@ -637,6 +648,7 @@ static void png_parse(Png *g, const uint8_t *d, size_t n)
         }
         if (!is_idat && !(g->anim && (!strcmp(c->type, "fcTL") || !strcmp(c->type, "fdAT"))))
             continue;
+
         if (!strcmp(c->type, "fdAT")) {
             if (!cur || !cur->fctl || cur->in_idat || c->len < 4)
                 fail("broken APNG: fdAT without its fcTL");
@@ -644,12 +656,14 @@ static void png_parse(Png *g, const uint8_t *d, size_t n)
             buf_put(&cur->z, c->data + 4, c->len - 4);
             continue;
         }
+
         if (is_idat && idat) {
             if (cur != idat)
                 fail("broken PNG: IDAT chunks are not consecutive");
             buf_put(&idat->z, c->data, c->len);
             continue;
         }
+
         if (g->npl == cap_pl) {
             Plane *np = acalloc(2 * cap_pl * sizeof(Plane));
             memcpy(np, g->pl, cap_pl * sizeof(Plane));
@@ -661,6 +675,7 @@ static void png_parse(Png *g, const uint8_t *d, size_t n)
                     idat = &g->pl[j];
             cur = &g->pl[g->npl - 1];
         }
+
         if (is_idat) {
             if (seen_fdat)
                 fail("broken APNG: IDAT after fdAT");
@@ -676,6 +691,7 @@ static void png_parse(Png *g, const uint8_t *d, size_t n)
             buf_put(&idat->z, c->data, c->len);
             continue;
         }
+
         /* fcTL: a new frame */
         if (c->len != 26)
             fail("broken APNG: bad fcTL");
@@ -691,6 +707,7 @@ static void png_parse(Png *g, const uint8_t *d, size_t n)
         cur->y = (int)fy;
         nfctl++;
     }
+
     if (!g->npl)
         fail("no image data");
     if (g->anim && (uint32_t)nfctl != be32(g->actl))
@@ -750,6 +767,7 @@ static void decode_plane(const Png *g, Plane *pl)
 {
     const int W = pl->W, H = pl->H, bpp = g->bpp;
     const size_t row = pl->row;
+
     size_t raw = 0;
     if (!g->interlace)
         raw = (size_t)H * (1 + row);
@@ -760,6 +778,7 @@ static void decode_plane(const Png *g, Plane *pl)
             if (W > A7[p][0] && H > A7[p][1])
                 raw += ph * (1 + pw * bpp);
         }
+
     uint8_t *buf = amalloc(raw);
     z_stream s;
     memset(&s, 0, sizeof s);
@@ -780,6 +799,7 @@ static void decode_plane(const Png *g, Plane *pl)
     inflateEnd(&s);
     if (out_left)
         fail("corrupt or truncated image data");
+
     pl->px = amalloc((size_t)H * row);
     if (!g->interlace) {
         for (int y = 0; y < H; y++) {
@@ -789,6 +809,7 @@ static void decode_plane(const Png *g, Plane *pl)
         }
         return;
     }
+
     uint8_t *p = buf;
     for (int ps = 0; ps < 7; ps++) {
         if (W <= A7[ps][0] || H <= A7[ps][1])
@@ -828,9 +849,11 @@ static int reduce_format(Png *g)
 {
     const int C = g->C, hasA = C == 2 || C == 4, colour = C >= 3, top = g->bps == 1 ? 255 : 65535;
     int can8 = g->bps == 2, opaque = hasA, grey = colour;
+
     for (int p = 0; p < g->npl && opaque; p++)
         if (g->pl[p].fctl && (g->pl[p].x || g->pl[p].y || g->pl[p].W != g->W || g->pl[p].H != g->H))
             opaque = 0;
+
     for (int p = 0; p < g->npl && (can8 || opaque || grey); p++) {
         const Plane *pl = &g->pl[p];
         size_t n = (size_t)pl->W * pl->H;
@@ -845,8 +868,10 @@ static int reduce_format(Png *g)
                 grey = sample(g, px, 0) == sample(g, px, 1) && sample(g, px, 1) == sample(g, px, 2);
         }
     }
+
     if (!can8 && !opaque && !grey)
         return 0;
+
     const int nC = (colour && !grey ? 3 : 1) + (hasA && !opaque), nbps = can8 ? 1 : g->bps;
     const int nbpp = nC * nbps;
     for (int p = 0; p < g->npl; p++) {
@@ -878,6 +903,7 @@ static int reduce_format(Png *g)
         pl->px = out;
         pl->row = (size_t)pl->W * nbpp;
     }
+
     g->C = nC;
     g->bps = nbps;
     g->depth = 8 * nbps;
@@ -909,6 +935,7 @@ static uint32_t rewrite_for_reduction(const Chunk *c, int red, int oldC, int new
                 out[i] = (uint8_t)newdepth;
         return m;
     }
+
     if (!strcmp(c->type, "bKGD")) {
         int colour = oldC >= 3, n = colour ? 3 : 1;
         if ((int)c->len != 2 * n)
@@ -918,6 +945,7 @@ static uint32_t rewrite_for_reduction(const Chunk *c, int red, int oldC, int new
             v[i] = (c->data[2 * i] << 8) | c->data[2 * i + 1];
         if ((red & R_GREY) && !(v[0] == v[1] && v[1] == v[2]))
             return 0;
+
         int m = (red & R_GREY) || !colour ? 1 : 3;
         for (int i = 0; i < m; i++) {
             int x = v[i];
@@ -931,6 +959,7 @@ static uint32_t rewrite_for_reduction(const Chunk *c, int red, int oldC, int new
         }
         return 2 * m;
     }
+
     return c->len;
 }
 
@@ -954,6 +983,7 @@ static int chunk_category(const Chunk *c)
     static const char *phys[] = {"pHYs", "oFFs", "sCAL", "pCAL", 0};
     static const char *text[] = {"tEXt", "zTXt", "iTXt", 0};
     static const char *never[] = {"acTL", "fcTL", "fdAT", "hIST", "sPLT", "tRNS", 0};
+
     const char *t = c->type;
     if (in_list(t, color))
         return K_COLOR;
@@ -1001,6 +1031,7 @@ static void icc_name(const Chunk *c, char *out, size_t outn)
         return;
     const uint8_t *zs = nul + 2;
     size_t zl = c->len - (zs - c->data);
+
     uLongf cap = 1 << 16;
     uint8_t *p = NULL;
     for (int tries = 0; tries < 8; tries++, cap *= 4) {
@@ -1017,6 +1048,7 @@ static void icc_name(const Chunk *c, char *out, size_t outn)
     }
     if (!p || cap < 132)
         return;
+
     uint32_t nt = be32(p + 128);
     for (uint32_t i = 0; i < nt && 132 + 12 * (i + 1) <= cap; i++) {
         const uint8_t *e = p + 132 + 12 * i;
@@ -1025,6 +1057,7 @@ static void icc_name(const Chunk *c, char *out, size_t outn)
         uint32_t off = be32(e + 4), sz = be32(e + 8);
         if (off > cap || sz > cap - off || sz < 12)
             return;
+
         const uint8_t *t = p + off;
         size_t k = 0;
         if (!memcmp(t, "desc", 4)) {
@@ -1037,6 +1070,7 @@ static void icc_name(const Chunk *c, char *out, size_t outn)
                 out[k++] = t[o + j] ? '?' : t[o + j + 1];
         } else
             return;
+
         while (k && out[k - 1] == ' ')
             k--;
         out[k] = 0;
@@ -1054,6 +1088,7 @@ static size_t fit_strip(struct libdeflate_compressor *comp, const uint8_t *in, s
     size_t m = libdeflate_deflate_compress(comp, in, n, out, cap - 8);
     if (!m)
         return 0;
+
     z_stream s;
     memset(&s, 0, sizeof s);
     if (inflateInit2(&s, -15) != Z_OK)
@@ -1062,6 +1097,7 @@ static size_t fit_strip(struct libdeflate_compressor *comp, const uint8_t *in, s
     s.avail_in = (uInt)m;
     s.next_out = scratch;
     s.avail_out = (uInt)n + 1;
+
     uint64_t last_hdr = 0, end_bit = 0;
     for (;;) {
         int ret = inflate(&s, Z_BLOCK);
@@ -1079,9 +1115,11 @@ static size_t fit_strip(struct libdeflate_compressor *comp, const uint8_t *in, s
                 last_hdr = pos;
         }
     }
+
     inflateEnd(&s);
     if (!end_bit || s.total_out != n)
         return 0;
+
     out[last_hdr >> 3] &= (uint8_t)~(1u << (last_hdr & 7));
     size_t bytes = (size_t)((end_bit + 7) >> 3);
     unsigned used = end_bit & 7;
@@ -1089,6 +1127,7 @@ static size_t fit_strip(struct libdeflate_compressor *comp, const uint8_t *in, s
         out[bytes - 1] &= (uint8_t)((1u << used) - 1);
     if (used == 0 || used > 5)
         out[bytes++] = 0;
+
     out[bytes++] = 0;
     out[bytes++] = 0;
     out[bytes++] = 0xFF;
@@ -1200,6 +1239,7 @@ static double quant_row(const Fit *F, int W, const uint8_t *src, const uint8_t *
             const uint8_t *al = src + (size_t)x * bpp + ncol;
             inv = F->bps == 1 ? !al[0] : !(al[0] | al[1]);
         }
+
         for (int b = 0; b < bpp; b++) {
             size_t j = (size_t)x * bpp + b;
             int a = x ? rec[j - bpp] : 0, bb = up[j], c = x ? up[j - bpp] : 0;
@@ -1224,6 +1264,7 @@ static double quant_row(const Fit *F, int W, const uint8_t *src, const uint8_t *
                     val = p + alt >= 0 && p + alt <= 255 ? p + alt : p;
                 }
             }
+
             rec[j] = (uint8_t)val;
             uint8_t e = (uint8_t)(val - p);
             res[j] = e;
@@ -1240,6 +1281,7 @@ static Res quant_strip(const Fit *F, int k, Work *w)
     const size_t row = pl->row;
     const uint8_t *prev = y0 ? pl->px + (size_t)(y0 - 1) * row : F->zeros;
     const int anchor = k + 1 < F->K && F->sp[k + 1] == F->sp[k]; /* not the last strip of its plane */
+
     Res r = {0, 0, 0, 0};
     for (int y = 0; y < h; y++) {
         const uint8_t *src = pl->px + (size_t)(y0 + y) * row;
@@ -1247,6 +1289,7 @@ static Res quant_strip(const Fit *F, int k, Work *w)
         uint8_t *rec = w->rec + (size_t)y * row, *res = w->out_f + (size_t)y * (row + 1) + 1;
         const uint8_t *rg = w->rung + (size_t)y * W;
         const int lossless = anchor && y == h - 1;
+
         double base = quant_row(F, W, src, up, rg, lossless, F->filt, rec, res);
         int bf = F->filt;
         double best = base * (1.0 - F->sw);
@@ -1264,6 +1307,7 @@ static Res quant_strip(const Fit *F, int k, Work *w)
                 quant_row(F, W, src, up, rg, lossless, bf, rec, res);
         }
         w->out_f[(size_t)y * (row + 1)] = (uint8_t)bf;
+
         const float *wg = pl->wgt + (size_t)(y0 + y) * W;
         for (int x = 0; x < W; x++) {
             double pe8 = 0, pen = 0;
@@ -1356,10 +1400,12 @@ static const int32_t *seed_rank(const Fit *F, int k, int seed, Work *w)
     int64_t n = F->npx[k];
     if (w->sk == k && w->sseed == seed)
         return w->srank;
+
     if (!w->srank) {
         w->srank = xmalloc(F->maxn * sizeof(int32_t));
         w->skeys = xmalloc(F->maxn * sizeof(struct SK));
     }
+
     const int32_t *rk = F->rank[F->sp[k]] + (size_t)F->y0[k] * F->g->pl[F->sp[k]].W;
     double width = n / 200 > 64 ? n / 200 : 64;
     uint64_t st = (uint64_t)seed * 1000003u + k;
@@ -1367,6 +1413,7 @@ static const int32_t *seed_rank(const Fit *F, int k, int seed, Work *w)
         w->skeys[i].key = rk[i] + (splitmix(&st) >> 11) * (1.0 / 9007199254740992.0) * width;
         w->skeys[i].idx = (int32_t)i;
     }
+
     qsort(w->skeys, n, sizeof *w->skeys, cmp_sk);
     for (int64_t i = 0; i < n; i++)
         w->srank[w->skeys[i].idx] = (int32_t)i;
@@ -1392,6 +1439,7 @@ static Res compute(Fit *F, int k, int64_t P, int seed, Work *w, Keep *keep, uint
         int64_t r = (P + rk[i]) / n;
         w->rung[i] = (uint8_t)(r > top ? top : r);
     }
+
     Res r = quant_strip(F, k, w);
     size_t fl = (size_t)(F->y1[k] - F->y0[k]) * (pl->row + 1);
     size_t m = fit_strip(w->comp[F->cur], w->out_f, fl, w->frag, w->frag_cap, w->scratch);
@@ -1399,6 +1447,7 @@ static Res compute(Fit *F, int k, int64_t P, int seed, Work *w, Keep *keep, uint
         fputs("pngfit: internal error: DEFLATE fragment could not be stitched\n", stderr);
         exit(2);
     }
+
     r.R = (int64_t)m;
     if (keep) {
         keep->frag = xmalloc(m);
@@ -1441,9 +1490,11 @@ static Res eval(Fit *F, int k, int64_t P, int seed, Work *w, int *fresh)
         *fresh = !e;
     if (e)
         return e->r;
+
     Res r = compute(F, k, P, seed, w, NULL, NULL);
     if (F->nocache)
         return r;
+
     pthread_mutex_lock(&F->mu);
     if (!cache_find(F, k, P, seed)) {
         e = amalloc(sizeof *e); /* workers only run while the main thread waits */
@@ -1613,6 +1664,7 @@ static int64_t best_under(Fit *F, int64_t T, int64_t *P)
     int *cnt = amalloc(K * sizeof(int)), *idx = amalloc(K * sizeof(int));
     for (int k = 0; k < K; k++)
         cnt[k] = get_pts(F, k, &pts[k]);
+
     double lo = 0, hi = 1;
     for (int i = 0; i < 400 && solve(K, pts, cnt, hi, idx) > T; i++)
         hi *= 4;
@@ -1623,6 +1675,7 @@ static int64_t best_under(Fit *F, int64_t T, int64_t *P)
         else
             hi = mid;
     }
+
     int64_t tot = solve(K, pts, cnt, hi, idx);
     for (;;) {
         double bg = -1;
@@ -1646,6 +1699,7 @@ static int64_t best_under(Fit *F, int64_t T, int64_t *P)
         tot += pts[bk][bi].R - pts[bk][idx[bk]].R;
         idx[bk] = bi;
     }
+
     for (int k = 0; k < K; k++)
         P[k] = pts[k][idx[k]].P;
     return tot;
@@ -1695,6 +1749,7 @@ static void build_ladder(const Opts *o, const Png *g, Fit *F, int extended)
     } else
         for (int q = 1; q <= 255; q += o->ladder_kind == 0 ? 2 : 1)
             st[n++] = q;
+
     /* 8-bit: steps up to 63 (+-31), on to 255 for targets below that. 16-bit: the low bytes take the
      * whole list, then the high bytes climb it again, to 63 or 255. */
     int top = extended ? 255 : 63, E = o->max_error;
@@ -1708,10 +1763,12 @@ static void build_ladder(const Opts *o, const Png *g, Fit *F, int extended)
     if (g->bps == 2) /* high bytes: worst error = (q_hi / 2) * 256 + (last low step) / 2 */
         while (hi_n < n && st[hi_n] <= top && (E < 0 || st[hi_n] / 2 * 256 + st[lo_n - 1] / 2 <= E))
             hi_n++;
+
     F->clamp_above = extended ? 63 : 0;
     F->L = g->bps == 1 ? lo_n : lo_n + hi_n - 1;
     if (F->L > 255)
         F->L = 255;
+
     F->qtab = amalloc((size_t)F->L * g->bpp);
     for (int r = 0; r < F->L; r++)
         for (int c = 0; c < g->C; c++) {
@@ -1724,6 +1781,7 @@ static void build_ladder(const Opts *o, const Png *g, Fit *F, int extended)
                 F->qtab[r * g->bpp + 2 * c + 1] = lossy ? ql : 1;
             }
         }
+
     /* the dead zone needs no error cap to keep, and 8-bit samples */
     int dz = o->max_error < 0 && !o->nearest && g->bps == 1;
     F->otab = amalloc((size_t)F->L * g->bpp);
@@ -1794,6 +1852,7 @@ static void task_seed(Fit *F, void *ctx, int i, Work *w)
     int seed = s->seed;
     int64_t P = s->P0, tried[8];
     int nt = 0;
+
     for (int it = 0; it < 8; it++) {
         if (P < 0)
             P = 0;
@@ -1805,6 +1864,7 @@ static void task_seed(Fit *F, void *ctx, int i, Work *w)
         if (dup)
             break;
         tried[nt++] = P;
+
         int fresh;
         Res r = eval(F, s->k, P, seed, w, &fresh);
         if (fresh)
@@ -1814,6 +1874,7 @@ static void task_seed(Fit *F, void *ctx, int i, Work *w)
             s->hitP = P;
             return;
         }
+
         double step = (double)(r.R - s->need) / s->g;
         int64_t st = (int64_t)llround(fabs(step));
         P += (step > 0 ? 1 : -1) * (st > 1 ? st : 1);
@@ -1926,6 +1987,7 @@ static void write_result(Fit *F, const Png *g, const Choice *ch, const uint8_t *
             put32(fc, seq++);
             buf_chunk(&b, "fcTL", fc, 26);
         }
+
         size_t zlen = 4 + 2 + 2 + 4;
         for (int j = k; j < K && F->sp[j] == p; j++)
             zlen += keep[j].len;
@@ -1937,6 +1999,7 @@ static void write_result(Fit *F, const Png *g, const Choice *ch, const uint8_t *
             put32(z, seq++);
             zp = 4;
         }
+
         z[zp++] = 0x78;
         z[zp++] = 0xDA;
         uLong ad = 1;
@@ -1946,12 +2009,14 @@ static void write_result(Fit *F, const Png *g, const Choice *ch, const uint8_t *
             ad = adler32_combine(ad, keep[k].adler, (z_off_t)keep[k].raw);
             free(keep[k].frag);
         }
+
         z[zp++] = 0x03; /* empty final fixed-Huffman block */
         z[zp++] = 0x00;
         put32(z + zp, (uint32_t)ad);
         zp += 4;
         buf_chunk(&b, pl->in_idat ? "IDAT" : "fdAT", z, (uint32_t)zp);
     }
+
     buf_chunk(&b, "IEND", NULL, 0);
     if ((int64_t)b.n > size && res->status != 4)
         fail("internal error: output is %zu B, above the %lld B target", b.n, (long long)size);
@@ -1965,6 +2030,7 @@ static void write_result(Fit *F, const Png *g, const Choice *ch, const uint8_t *
         xremove(tmp);
         fail("cannot write %s", tmp);
     }
+
     /* verify by decoding what we wrote: every plane, every byte */
     prog_start("verifying", 0, NULL);
     Png back;
@@ -1978,10 +2044,12 @@ static void write_result(Fit *F, const Png *g, const Choice *ch, const uint8_t *
         xremove(tmp);
         fail("internal error: decoded image differs from the model");
     }
+
     if (xrename(tmp, dst)) {
         xremove(tmp);
         fail("cannot rename %s to %s: %s", tmp, dst, strerror(errno));
     }
+
     double sse = 0, npx = 0;
     int maxe = 0;
     int64_t changed = 0;
@@ -2010,16 +2078,19 @@ static void write_result(Fit *F, const Png *g, const Choice *ch, const uint8_t *
             }
         }
     }
+
     double peak = g->bps == 1 ? 255.0 : 65535.0;
     double mse = sse / (npx * g->C);
     res->size = (int64_t)b.n;
     res->psnr = mse > 0 ? 10 * log10(peak * peak / mse) : INFINITY;
     res->maxe = maxe;
     res->changed = (double)changed / npx;
+
     if (res->status == 0 && res->size != size)
         res->status = 3;
     if (res->status == 4 && res->size == size)
         res->status = 0;
+
     logmsg("wrote %s: %lld B (target %lld, %s)", dst, (long long)b.n, (long long)size,
            b.n == (size_t)size ? "EXACT"
            : res->status == 4  ? "the minimum"
@@ -2047,11 +2118,13 @@ static int64_t window_(Fit *F, int k, int64_t lo, int64_t hi, int64_t *probes, i
             Ra = pts[i].R;
         }
     }
+
     for (int i = c - 1; i >= 0; i--)
         if (pts[i].R < lo && pts[i].P > a && (b < 0 || pts[i].P < b)) { /* too small, above a */
             b = pts[i].P;
             Rb = pts[i].R;
         }
+
     if (a < 0 || b < 0)
         return -1; /* the window lies outside what this strip can do */
     while (b - a > 1) {
@@ -2066,6 +2139,7 @@ static int64_t window_(Fit *F, int k, int64_t lo, int64_t hi, int64_t *probes, i
             Rb = r;
         }
     }
+
     brk_lo[k] = a;
     brk_g[k] = (double)(Ra - Rb) > 1e-6 ? (double)(Ra - Rb) : 1e-6;
     has_brk[k] = 1;
@@ -2081,6 +2155,7 @@ static int64_t single_(Fit *F, int k, int64_t need, int64_t *probes, int64_t *br
     int64_t P = window_(F, k, need, need, probes, brk_lo, brk_g, has_brk);
     if (P >= 0 || !has_brk[k])
         return P;
+
     int64_t lo = brk_lo[k], cand[48];
     int nc = 0;
     for (int d = 0; d < 24; d++) {
@@ -2089,6 +2164,7 @@ static int64_t single_(Fit *F, int k, int64_t need, int64_t *probes, int64_t *br
         if (lo + 1 + d <= F->maxP[k])
             cand[nc++] = lo + 1 + d;
     }
+
     int step = LAND_BATCH;
     Req *cr = amalloc(step * sizeof(Req));
     for (int b0 = 0; b0 < nc; b0 += step) {
@@ -2110,6 +2186,7 @@ static int fit_once(const Opts *o, const Png *g, const uint8_t *head, size_t hea
 {
     if (minimum) /* one strip per plane: no lossless anchor rows, nothing left to land */
         strip_h = g->H;
+
     Fit *F = acalloc(sizeof(Fit));
     F->g = g;
     F->C = g->C;
@@ -2123,6 +2200,7 @@ static int fit_once(const Opts *o, const Png *g, const uint8_t *head, size_t hea
     F->arena = arena;
     pthread_mutex_init(&F->mu, NULL);
     build_ladder(o, g, F, extended);
+
     /* strips run through the planes in order, contiguous per plane; on the two thin strips a landing
      * probe costs a fraction of a full strip and moves the size in finer steps */
     const int LAND = 16;
@@ -2135,10 +2213,12 @@ static int fit_once(const Opts *o, const Png *g, const uint8_t *head, size_t hea
      * 3000x3000 photo); a bottom that cannot take the slack lets a full strip take the bulk first */
     if (land)
         ws = g->pl[lp].H - 2 * LAND;
+
     int K = 0;
     for (int p = 0; p < g->npl; p++)
         K += land && p == lp ? (ws + strip_h - 1) / strip_h + 2 + (g->pl[p].H - ws - 2 * LAND + strip_h - 1) / strip_h
                              : (g->pl[p].H + strip_h - 1) / strip_h;
+
     F->K = K;
     F->sp = amalloc(K * sizeof(int));
     F->y0 = amalloc(K * sizeof(int));
@@ -2146,6 +2226,7 @@ static int fit_once(const Opts *o, const Png *g, const uint8_t *head, size_t hea
     F->npx = amalloc(K * sizeof(int64_t));
     F->maxP = amalloc(K * sizeof(int64_t));
     F->rank = amalloc(g->npl * sizeof(int32_t *));
+
     for (int p = 0, k = 0; p < g->npl; p++) {
         const Plane *pl = &g->pl[p];
         F->rank[p] = amalloc((size_t)pl->W * pl->H * sizeof(int32_t));
@@ -2159,6 +2240,7 @@ static int fit_once(const Opts *o, const Png *g, const uint8_t *head, size_t hea
                 int lim = land && p == lp && y < ws ? ws : pl->H;
                 hh = y + strip_h < lim ? strip_h : lim - y;
             }
+
             F->sp[k] = p;
             F->y0[k] = y;
             F->y1[k] = y + hh;
@@ -2174,6 +2256,7 @@ static int fit_once(const Opts *o, const Png *g, const uint8_t *head, size_t hea
                 F->maxn = F->npx[k];
         }
     }
+
     F->zeros = acalloc(F->maxrow);
     work_init(&F->mainw, F);
     prog_start("ranking", K, NULL);
@@ -2199,6 +2282,7 @@ static int fit_once(const Opts *o, const Png *g, const uint8_t *head, size_t hea
                 bf = f;
             }
         }
+
         F->filt = bf;
         int64_t size = o->size >= 0 ? o->size : llround(o->pct * (res->lossless ? res->lossless : best + fixed));
         res->target = size;
@@ -2207,12 +2291,14 @@ static int fit_once(const Opts *o, const Png *g, const uint8_t *head, size_t hea
             rv = NEED_ONESTRIP;
             goto out;
         }
+
         char rd[32];
         describe_rung(F, F->L - 1, rd, sizeof rd);
         logmsg("WARNING: %lld B cannot be reached: the smallest pngfit can make of this image is %lld B (%s "
                "everywhere, one strip, %s filter); writing that",
                (long long)size, (long long)(best + fixed), rd,
                (const char *[]){"None", "Sub", "Up", "Average", "Paeth"}[bf]);
+
         Choice *ch = acalloc(K * sizeof(Choice));
         for (int k = 0; k < K; k++)
             ch[k] = (Choice){F->maxP[k], 0};
@@ -2220,6 +2306,7 @@ static int fit_once(const Opts *o, const Png *g, const uint8_t *head, size_t hea
         write_result(F, g, ch, head, headn, size, dst, res);
         goto out;
     }
+
     /* probe base filter and row-switch threshold on a few strips at a typical step */
     int filt = o->filter;
     double sw = o->row_switch;
@@ -2230,6 +2317,7 @@ static int fit_once(const Opts *o, const Png *g, const uint8_t *head, size_t hea
             if (!nk || ks[nk - 1] != k)
                 ks[nk++] = k;
         }
+
         const int fs_all[4] = {1, 2, 3, 4};
         const double sws_all[4] = {0, 0.05, 0.1, 0.2};
         int nf = filt < 0 ? 4 : 1, ns = sw < 0 ? 4 : 1;
@@ -2237,6 +2325,7 @@ static int fit_once(const Opts *o, const Png *g, const uint8_t *head, size_t hea
         int64_t Rs[4];
         ProbeCtx pc = {F, ks, Rs};
         prog_start("filter probe", (int64_t)nk * (nf + ns - 1), NULL);
+
         int64_t best = -1;
         int bf = filt;
         for (int i = 0; i < nf; i++) {
@@ -2251,6 +2340,7 @@ static int fit_once(const Opts *o, const Png *g, const uint8_t *head, size_t hea
                 bf = F->filt;
             }
         }
+
         filt = bf;
         double bsw = sw0;
         for (int i = 0; i < ns; i++) {
@@ -2270,6 +2360,7 @@ static int fit_once(const Opts *o, const Png *g, const uint8_t *head, size_t hea
         }
         sw = bsw;
     }
+
     F->filt = filt;
     F->sw = sw;
     static const char *FN[] = {"None", "Sub", "Up", "Average", "Paeth"};
@@ -2280,9 +2371,11 @@ static int fit_once(const Opts *o, const Png *g, const uint8_t *head, size_t hea
     for (int k = 0; k < K; k++)
         rq[n++] = (Req){k, 0, 0};
     evaluate(F, rq, n, "lossless");
+
     int64_t total0 = 0;
     for (int k = 0; k < K; k++)
         total0 += cached(F, k, 0, 0).R;
+
     /* hybrid search: the rough work (ladder, rate-distortion rounds) runs at a faster
      * libdeflate level, priced in its bytes; the final level decides the result */
     const int hybrid = F->lv[0] != F->lv[1];
@@ -2298,12 +2391,14 @@ static int fit_once(const Opts *o, const Png *g, const uint8_t *head, size_t hea
             total0x += cached(F, k, 0, 0).R;
         F->cur = 1;
     }
+
     int64_t size = o->size >= 0 ? o->size : llround(o->pct * (total0 + fixed));
     int64_t T = size - fixed;
     res->target = size;
     res->lossless = total0 + fixed;
     logmsg("lossless (strips, level %d): %lld B, budget %lld B", o->level, (long long)(total0 + fixed),
            (long long)size);
+
     if ((int64_t)g->size <= size) {
         logmsg("source is already %lld B <= %lld B: left untouched, nothing written", (long long)g->size,
                (long long)size);
@@ -2311,6 +2406,7 @@ static int fit_once(const Opts *o, const Png *g, const uint8_t *head, size_t hea
         res->size = g->size;
         goto out;
     }
+
     int64_t phys = fixed + (int64_t)((raw_bytes(g) + 1031) / 1032);
     if (size < phys && !extended) { /* percent targets are only known here */
         logmsg("WARNING: %lld B is below what any %dx%d PNG can be (about %lld B: headers plus DEFLATE's "
@@ -2322,6 +2418,7 @@ static int fit_once(const Opts *o, const Png *g, const uint8_t *head, size_t hea
 
     Choice *ch = acalloc(K * sizeof(Choice));
     int64_t *Pc = amalloc(K * sizeof(int64_t));
+
     if (total0 <= T) {
         logmsg("our lossless re-encode fits (the source does not): writing it, smaller than the target; "
                "reaching the exact size would only take padding");
@@ -2339,6 +2436,7 @@ static int fit_once(const Opts *o, const Png *g, const uint8_t *head, size_t hea
         int64_t tot_top = 0;
         for (int k = 0; k < K; k++)
             tot_top += cached(F, k, F->maxP[k], 0).R;
+
         if (tot_top > T && o->max_error >= 0) {
             logmsg("WARNING: %lld B is below what --max-error %d allows (%lld B); writing the smallest file "
                    "within that error",
@@ -2357,9 +2455,11 @@ static int fit_once(const Opts *o, const Png *g, const uint8_t *head, size_t hea
             rv = NEED_MIN;
             goto out;
         }
+
         /* exploration budget, in bytes of the exploration level */
         int64_t Tx = hybrid ? (int64_t)((double)T * total0x / total0) : T;
         F->cur = hybrid ? 0 : 1;
+
         /* coarse grid: whole rungs (and half rungs) until everything at rung r fits */
         int r_fit;
         if (F->L <= 40) {
@@ -2401,6 +2501,7 @@ static int fit_once(const Opts *o, const Png *g, const uint8_t *head, size_t hea
                 else
                     lo = mid;
             }
+
             r_fit = hi;
             n = 0;
             const double fr[] = {0.0625, 0.125, 0.25, 0.5};
@@ -2430,10 +2531,12 @@ static int fit_once(const Opts *o, const Png *g, const uint8_t *head, size_t hea
                 if (i + 1 < c && pts[i + 1].P - pts[i].P > 1)
                     rq[n++] = (Req){k, (pts[i].P + pts[i + 1].P) / 2, 0};
             }
+
             snprintf(lab, sizeof lab, "RD round %d/%d", rnd + 1, o->rounds);
             evaluate(F, rq, n, lab);
             logmsg("  RD round %d: %lld B, weighted SSE %.4g", rnd + 1, (long long)(tot + fixed), wd);
         }
+
         int64_t tot = best_under(F, Tx, Pc);
         if (hybrid) {
             /* price the allocation at the final level; levels differ by a few per cent, unevenly across
@@ -2445,6 +2548,7 @@ static int fit_once(const Opts *o, const Png *g, const uint8_t *head, size_t hea
                 for (int k = 0; k < K; k++)
                     rq[n++] = (Req){k, Pc[k], 0};
                 evaluate(F, rq, n, "final level");
+
                 int64_t t1 = 0, tx = 0;
                 for (int k = 0; k < K; k++) {
                     t1 += cached(F, k, Pc[k], 0).R;
@@ -2452,12 +2556,14 @@ static int fit_once(const Opts *o, const Png *g, const uint8_t *head, size_t hea
                 }
                 logmsg("  at level %d: %lld B (exploration budget %lld B)", F->lv[1], (long long)(t1 + fixed),
                        (long long)(Tx + fixed));
+
                 if (t1 <= T && t1 > best_ok) {
                     best_ok = t1;
                     memcpy(Pbest, Pc, K * sizeof(int64_t));
                 }
                 if (t1 <= T && T - t1 <= (T / 500 > 4096 ? T / 500 : 4096))
                     break;
+
                 /* the strips' curves are sparse, so a correction the size of the miss may not move the
                  * allocation: double it until it does (a choice among priced points, no compression) */
                 memcpy(Plast, Pc, K * sizeof(int64_t));
@@ -2472,6 +2578,7 @@ static int fit_once(const Opts *o, const Png *g, const uint8_t *head, size_t hea
                         break;
                 }
             }
+
             F->cur = 1;
             if (best_ok < 0) { /* never under: the best mix of the points priced at the final level */
                 best_ok = best_under(F, T, Pbest);
@@ -2483,8 +2590,10 @@ static int fit_once(const Opts *o, const Png *g, const uint8_t *head, size_t hea
                         best_ok += cached(F, k, F->maxP[k], 0).R;
                 }
             }
+
             memcpy(Pc, Pbest, K * sizeof(int64_t));
             tot = best_ok;
+
             /* brackets for the landing: the next exploration point below each choice,
              * for the strips the landing tries first */
             n = 0;
@@ -2494,6 +2603,7 @@ static int fit_once(const Opts *o, const Png *g, const uint8_t *head, size_t hea
                     before += F->npx[j] < F->npx[k] || (F->npx[j] == F->npx[k] && Pc[j] > Pc[k]);
                 if (before >= 4)
                     continue;
+
                 F->cur = 0;
                 Pt *pts;
                 int c = get_pts(F, k, &pts), i = 0;
@@ -2505,6 +2615,7 @@ static int fit_once(const Opts *o, const Png *g, const uint8_t *head, size_t hea
             }
             evaluate(F, rq, n, "brackets");
         }
+
         F->cur = 1;
         for (int k = 0; k < K; k++)
             ch[k] = (Choice){Pc[k], 0};
@@ -2512,9 +2623,11 @@ static int fit_once(const Opts *o, const Png *g, const uint8_t *head, size_t hea
         /* exact landing */
         int64_t slack = T - tot;
         logmsg("slack after RD: %lld B, landing on the exact byte", (long long)slack);
+
         int64_t *base = amalloc(K * sizeof(int64_t));
         for (int k = 0; k < K; k++)
             base[k] = cached(F, k, ch[k].P, 0).R;
+
         int *order = amalloc(K * sizeof(int));
         for (int k = 0; k < K; k++)
             order[k] = k;
@@ -2526,6 +2639,7 @@ static int fit_once(const Opts *o, const Png *g, const uint8_t *head, size_t hea
                 order[j] = order[j - 1];
                 order[j - 1] = t;
             }
+
         int64_t probes = 0;
         int landed = slack == 0;
         int64_t *brk_lo = amalloc(K * sizeof(int64_t));
@@ -2554,6 +2668,7 @@ static int fit_once(const Opts *o, const Png *g, const uint8_t *head, size_t hea
                 down += et ? base[k] - et->r.R : 0;
                 thin += base[k];
             }
+
             int64_t D = thin / 50 > 256 ? thin / 50 : 256;
             up = up * 4 / 5 < D ? up * 4 / 5 : D;
             down = down * 4 / 5 < D ? down * 4 / 5 : D;
@@ -2577,6 +2692,7 @@ static int fit_once(const Opts *o, const Png *g, const uint8_t *head, size_t hea
                 }
             }
         }
+
         /* the thin strips alone */
         for (int ii = 0; ii < nth && !landed; ii++) {
             int k = order[ii];
@@ -2587,6 +2703,7 @@ static int fit_once(const Opts *o, const Png *g, const uint8_t *head, size_t hea
                 logmsg("  landed in strip %d alone (%lld probes)", k, (long long)probes);
             }
         }
+
         /* pairs: strip i takes slack - x, strip j takes x; sums of two noisy size sets leave almost
          * no gaps. j runs over the cheap strips only */
         for (int jj = 0; jj < K && jj < nth + 4 && !landed; jj++) {
@@ -2601,6 +2718,7 @@ static int fit_once(const Opts *o, const Png *g, const uint8_t *head, size_t hea
                 }
             probes += n;
             parallel_for(F, n, task_eval, pr);
+
             Sizes sj = sizes_of(F, j);
             double bc = INFINITY;
             Entry *bi_e = NULL, *bj_e = NULL;
@@ -2624,6 +2742,7 @@ static int fit_once(const Opts *o, const Png *g, const uint8_t *head, size_t hea
                     }
                 }
             }
+
             if (bi >= 0) {
                 ch[bi] = (Choice){bi_e->P, bi_e->seed};
                 ch[j] = (Choice){bj_e->P, bj_e->seed};
@@ -2631,6 +2750,7 @@ static int fit_once(const Opts *o, const Png *g, const uint8_t *head, size_t hea
                 logmsg("  landed with strips %d+%d (%lld probes)", bi, j, (long long)probes);
             }
         }
+
         /* reshuffled tie orders on the bracketed strips, cheapest first, walked in parallel;
          * then single full strips; then a wide scan */
         for (int round = 0; round < 2 && !landed; round++) {
@@ -2644,6 +2764,7 @@ static int fit_once(const Opts *o, const Png *g, const uint8_t *head, size_t hea
                         logmsg("  landed in strip %d alone (%lld probes)", k, (long long)probes);
                     }
                 }
+
             for (int ii = 0, used = 0; ii < K && used < 3 && !landed; ii++) {
                 int k = order[ii];
                 if (!has_brk[k] || (round == 0 && ii >= nth))
@@ -2655,6 +2776,7 @@ static int fit_once(const Opts *o, const Png *g, const uint8_t *head, size_t hea
                     for (int i = 0; i < ns; i++)
                         sc[i] = (SeedCtx){k, s0 + i, base[k] + slack, brk_lo[k], brk_g[k], -1, 0};
                     parallel_for(F, ns, task_seed, sc);
+
                     double bw = INFINITY;
                     for (int i = 0; i < ns; i++)
                         if (sc[i].hit) {
@@ -2670,6 +2792,7 @@ static int fit_once(const Opts *o, const Png *g, const uint8_t *head, size_t hea
                 }
             }
         }
+
         for (int ii = 0, used = 0; ii < K && used < 3 && !landed; ii++) {
             int k = order[ii];
             if (!has_brk[k])
@@ -2688,6 +2811,7 @@ static int fit_once(const Opts *o, const Png *g, const uint8_t *head, size_t hea
                     }
             }
         }
+
         if (!landed) {
             int64_t t2 = 0;
             for (int k = 0; k < K; k++)
@@ -2742,6 +2866,7 @@ static void box5(const float *in, float *out, float *tmp, int W, int H) /* scipy
             o[x] = (float)(s / 5);
         }
     }
+
     for (int y = 0; y < H; y++) {
         float *o = out + (size_t)y * W;
         int ys[5];
@@ -2773,12 +2898,14 @@ static void activity(const Png *g, Plane *pl, double mask)
         l[i] = nc == 3 ? 0.299f * s[0] + 0.587f * s[1] + 0.114f * s[2] : s[0];
         l2[i] = l[i] * l[i];
     }
+
     /* temporaries live on the heap and go right away: they would otherwise sit in the
      * file's arena for the whole encode */
     float *m = xmalloc(N * sizeof(float)), *m2 = xmalloc(N * sizeof(float)), *tmp = xmalloc(N * sizeof(float));
     box5(l, m, tmp, pl->W, pl->H);
     box5(l2, m2, tmp, pl->W, pl->H);
     free(tmp);
+
     float *act = l, *wgt = l2; /* reuse */
     for (size_t i = 0; i < N; i++) {
         float v = m2[i] - m[i] * m[i];
@@ -2787,6 +2914,7 @@ static void activity(const Png *g, Plane *pl, double mask)
          * lost up to 1.2 dB on photographs and turned +-1 into +-28 on text, whose edges look like texture */
         wgt[i] = mask > 0 ? (float)(1.0 / ((1.0 + act[i] / mask) * (1.0 + act[i] / mask))) : 1.0f;
     }
+
     free(m);
     free(m2);
     pl->act = act;
@@ -2808,6 +2936,7 @@ static void fit_file(const Opts *o, const char *src, const char *dst, Result *re
         arena = NULL;
         return;
     }
+
     size_t n;
     uint8_t *d = read_file(src, &n);
     if (o->size >= 0 && (int64_t)n <= o->size) {
@@ -2820,6 +2949,7 @@ static void fit_file(const Opts *o, const char *src, const char *dst, Result *re
         arena = NULL;
         return;
     }
+
     if (same_file(src, dst))
         fail("refusing to overwrite the source; choose another output");
     Png g;
@@ -2828,6 +2958,7 @@ static void fit_file(const Opts *o, const char *src, const char *dst, Result *re
     for (int i = 0; i < g.nch; i++)
         if (!strcmp(g.ch[i].type, "tRNS"))
             fail("tRNS colour key is not supported: rounding could punch or fill transparent holes");
+
     png_decode(&g);
     int oldC = g.C, red = o->no_reduce ? 0 : reduce_format(&g);
     if (red) {
@@ -2862,21 +2993,25 @@ static void fit_file(const Opts *o, const char *src, const char *dst, Result *re
     ih[9] = g.ctype;
     ih[10] = ih[11] = ih[12] = 0;
     buf_chunk(&head, "IHDR", ih, 13);
+
     for (int i = 0; i < g.nch; i++) {
         const Chunk *c = &g.ch[i];
         if (!strcmp(c->type, "IHDR") || !strcmp(c->type, "IDAT") || !strcmp(c->type, "IEND") ||
             !strcmp(c->type, "PLTE") ||
             (g.anim && (!strcmp(c->type, "acTL") || !strcmp(c->type, "fcTL") || !strcmp(c->type, "fdAT"))))
             continue; /* structure, rebuilt on output */
+
         int cat = chunk_category(c), keep = cat && (o->keep_mask & cat);
         for (int j = 0; j < o->nkeep_names && cat; j++)
             keep |= !strcmp(o->keep_names[j], c->type);
         for (int j = 0; j < o->nstrip_names; j++)
             keep &= !!strcmp(o->strip_names[j], c->type);
+
         char item[64];
         snprintf(item, sizeof item, "%s%s[%s] %u B", (keep ? kept.n : drop.n) ? ", " : "", c->type, cat_name(cat),
                  c->len + 12);
         buf_put(keep ? &kept : &drop, item, strlen(item));
+
         if (keep && red && (!strcmp(c->type, "sBIT") || !strcmp(c->type, "bKGD"))) {
             uint8_t nb[8];
             uint32_t nl = rewrite_for_reduction(c, red, oldC, g.C, g.depth, nb);
@@ -2899,10 +3034,12 @@ static void fit_file(const Opts *o, const char *src, const char *dst, Result *re
         } else if (!strcmp(c->type, "gAMA") || !strcmp(c->type, "cHRM") || !strcmp(c->type, "cICP"))
             logmsg("WARNING: dropping %s: colours may look different", c->type);
     }
+
     buf_put(&kept, "", 1);
     buf_put(&drop, "", 1);
     logmsg("metadata kept: %s; dropped: %s", kept.n > 1 ? (char *)kept.p : "nothing",
            drop.n > 1 ? (char *)drop.p : "nothing");
+
     if (g.anim) {
         buf_chunk(&head, "acTL", g.actl, 8);
         uint32_t plays = be32(g.actl + 4);
@@ -2910,11 +3047,13 @@ static void fit_file(const Opts *o, const char *src, const char *dst, Result *re
         snprintf(pl, sizeof pl, plays ? "plays %u time(s)" : "loops forever", plays);
         logmsg("animation: %u frames on a %dx%d canvas, %s", be32(g.actl), g.W, g.H, pl);
     }
+
     /* fixed bytes: header and kept chunks, then per plane its fcTL, chunk framing
      * (plus fdAT's sequence number) and zlib framing, then IEND */
     int64_t fixed = (int64_t)head.n + 12;
     for (int p = 0; p < g.npl; p++)
         fixed += (g.pl[p].fctl ? 12 + 26 : 0) + 12 + (g.pl[p].in_idat ? 0 : 4) + 2 + 2 + 4;
+
     int64_t raw = (int64_t)raw_bytes(&g);
     int64_t floor_ = fixed + (raw + 1031) / 1032;
     int extended = 0;
@@ -2929,6 +3068,7 @@ static void fit_file(const Opts *o, const char *src, const char *dst, Result *re
     prog_start("analysing", 0, NULL);
     for (int p = 0; p < g.npl; p++)
         activity(&g, &g.pl[p], o->mask);
+
     /* content class by the share of perfectly flat pixels: synthetic images get thinner strips (+1.3 dB
      * on a desktop screenshot) and level 12 throughout (10 costs them ~2 dB); photos explore at 10 */
     double flat = 0, all = 0;
@@ -2939,22 +3079,26 @@ static void fit_file(const Opts *o, const char *src, const char *dst, Result *re
             flat += g.pl[p].act[i] == 0;
     }
     int synthetic = flat >= 0.3 * all;
+
     Opts o1 = *o;
     if (!o->strip_set)
         o1.strip = synthetic ? 64 : 128;
     if (!o->explore_set && synthetic)
         o1.explore_level = o->level;
+
     char rough[40] = "";
     if (o1.explore_level > 0 && o1.explore_level < o1.level)
         snprintf(rough, sizeof rough, ", rough search at level %d", o1.explore_level);
     logmsg("content: %s (%.0f%% flat pixels): %d-row strips%s", synthetic ? "synthetic" : "photographic",
            100 * flat / all, o1.strip, rough);
+
     int strip_h = o1.strip, minimum = 0, onestrip = 0;
     for (;;) {
         int last = strip_h <= 8 || onestrip;
         int rv = fit_once(&o1, &g, head.p, head.n, fixed, strip_h, last, extended, minimum, dst, res);
         if (o1.size < 0 && res->target > 0) /* a percent target is resolved once: retries must not drift */
             o1.size = res->target;
+
         if (rv == NEED_EXTEND) {
             extended = 1;
             continue;
@@ -2977,6 +3121,7 @@ static void fit_file(const Opts *o, const char *src, const char *dst, Result *re
         strip_h = strip_h / 2 > 8 ? strip_h / 2 : 8;
         logmsg("retrying with %d-row strips", strip_h);
     }
+
     prog_clear();
     res->time = now() - t0;
     arena_free();
@@ -2991,12 +3136,14 @@ static int64_t parse_size(const char *s, double *pct)
     double v = strtod(s, &end);
     if (end == s || v < 0 || !isfinite(v))
         return -2;
+
     while (*end == ' ')
         end++;
     if (*end == '%' && !end[1]) {
         *pct = v / 100;
         return -1;
     }
+
     double mul = 1;
     if (*end && strchr("kKmMgG", *end)) {
         int e = strchr("kK", *end) ? 1 : strchr("mM", *end) ? 2 : 3;
@@ -3006,10 +3153,12 @@ static int64_t parse_size(const char *s, double *pct)
             end++;
         mul = pow(base, e);
     }
+
     if (*end == 'B' || *end == 'b')
         end++;
     if (*end)
         return -2;
+
     double b = floor(v * mul); /* 0 = as small as possible */
     return b < 0x1p62 ? (int64_t)b : (int64_t)1 << 62; /* more than any file: it fits as it is */
 }
@@ -3048,6 +3197,7 @@ static int parse_meta(Opts *o, const char *s, int strip)
     for (char *t = strtok(buf, ","); t; t = strtok(NULL, ",")) {
         while (*t == ' ')
             t++;
+
         int m = -1;
         if (!strcmp(t, "all"))
             m = 255;
@@ -3066,6 +3216,7 @@ static int parse_meta(Opts *o, const char *s, int strip)
                 o->keep_mask |= m;
             continue;
         }
+
         int *cnt = strip ? &o->nstrip_names : &o->nkeep_names;
         if (strlen(t) != 4 || !isalpha((unsigned char)t[0]) || !isalpha((unsigned char)t[1]) ||
             !isalpha((unsigned char)t[2]) || !isalpha((unsigned char)t[3]) || *cnt >= 32) {
@@ -3146,6 +3297,7 @@ static void json_str(FILE *f, const char *s)
         int ok = n >= 0 && !(n == 1 && c < 0xC2);
         for (int i = 1; ok && i <= n; i++)
             ok = (p[i] & 0xC0) == 0x80;
+
         if (!ok) {
             fputs("\\ufffd", f);
             p++;
@@ -3173,6 +3325,7 @@ static void print_json(const char *src, const char *dst, const Result *r)
     printf(",\"dst\":");
     json_str(stdout, r->status == 1 || r->status < 0 ? "" : dst);
     printf(",\"status\":\"%s\"", r->status < 0 ? "error" : st[r->status]);
+
     if (r->status < 0) {
         printf(",\"error\":");
         json_str(stdout, r->msg);
@@ -3188,6 +3341,7 @@ static void print_json(const char *src, const char *dst, const Result *r)
                    r->changed, r->filt, r->sw, r->strips);
         }
     }
+
     printf(",\"time\":%.2f}\n", r->time);
     fflush(stdout);
 }
@@ -3235,6 +3389,7 @@ static void result_line(const char *tag, const char *src, const char *dst, const
     char pe[64];
     if (r->status == 0 || r->status >= 2)
         snprintf(pe, sizeof pe, "PSNR %.2f dB%s, max error %d", r->psnr, r->depth == 16 ? " (16-bit)" : "", r->maxe);
+
     switch (r->status) {
     case 0:
         fprintf(stderr, "%s %s -> %s: EXACT %lld B, %s, %.0f s\n", tag, src, dst, (long long)r->size, pe, r->time);
@@ -3293,10 +3448,12 @@ static void *batch_worker(void *arg)
         pthread_mutex_unlock(&b->mu);
         if (i >= b->n)
             break;
+
         char dst[4096], tag[32];
         batch_dst(dst, sizeof dst, b->outdir, b->in[i], b->suffix);
         Result r;
         fit_file(&b->fo, b->in[i], dst, &r);
+
         pthread_mutex_lock(&b->mu);
         b->done++;
         if (r.status < 0)
@@ -3325,8 +3482,10 @@ static int cli_main(int argc, char **argv)
     prog.on = prog.quiet = prog.lines = 0;
     prog.prefix[0] = 0;
     prog.last_line = 0;
+
     for (int i = 0; i < 256; i++)
         cost_tab[i] = log2(1 + abs(i < 128 ? i : 256 - i));
+
     Opts o;
     memset(&o, 0, sizeof o);
     o.size = -2;
@@ -3339,6 +3498,7 @@ static int cli_main(int argc, char **argv)
     o.rounds = 4;
     o.jobs = ncpu();
     const char *outdir = NULL, *suffix = "";
+
     enum {
         O_SUFFIX = 256,
         O_LALPHA,
@@ -3360,6 +3520,7 @@ static int cli_main(int argc, char **argv)
     };
     o.max_error = -1;
     o.explore_level = 10;
+
     static const struct option lo[] = {{"size", 1, 0, 's'},
                                        {"outdir", 1, 0, 'o'},
                                        {"suffix", 1, 0, O_SUFFIX},
@@ -3389,6 +3550,7 @@ static int cli_main(int argc, char **argv)
                                        {"version", 0, 0, 'V'},
                                        {"help", 0, 0, 'h'},
                                        {0, 0, 0, 0}};
+
     int c, keep_set = 0;
     while ((c = getopt_long(argc, argv, "s:o:k:x:e:pj:P:qVh", lo, NULL)) != -1) {
         switch (c) {
@@ -3520,22 +3682,27 @@ static int cli_main(int argc, char **argv)
             return 2;
         }
     }
+
     if (o.size == -2) {
         fputs("pngfit: -s/--size is required\n", stderr);
         usage(stderr);
         return 2;
     }
+
     int nin = argc - optind;
     if (outdir ? nin < 1 : nin != 2) {
         usage(stderr);
         return 2;
     }
+
     if (outdir && make_dirs(outdir)) {
         fprintf(stderr, "pngfit: cannot create %s: %s\n", outdir, strerror(errno));
         return 1;
     }
+
     prog.quiet = o.quiet;
     prog.on = !o.quiet && !prog.lines && stderr_tty(); /* a front end reads lines, not a redrawn bar */
+
     int nfail = 0, nexact = 0, nskip = 0, nother = 0, nmin = 0;
     int nfiles = outdir ? nin : 1;
     int par = o.parallel > 0 ? o.parallel : (outdir ? (nfiles < o.jobs ? nfiles : o.jobs) : 1);
@@ -3556,11 +3723,13 @@ static int cli_main(int argc, char **argv)
                    .bar = !o.quiet && !prog.lines && stderr_tty(),
                    .t0 = now(),
                    .mu = PTHREAD_MUTEX_INITIALIZER};
+
         b.fo.jobs = o.jobs / par > 0 ? o.jobs / par : 1;
         prog.quiet = 1;
         prog.on = 0;
         if (!o.quiet)
             fprintf(stderr, "%d file(s), %d at once, %d thread(s) each\n", nfiles, par, b.fo.jobs);
+
         batch_bar(&b);
         pthread_t th[64];
         for (int i = 0; i < par; i++)
@@ -3570,6 +3739,7 @@ static int cli_main(int argc, char **argv)
             }
         for (int i = 0; i < par; i++)
             pthread_join(th[i], NULL);
+
         if (b.bar)
             fputs("\r\x1b[K", stderr);
         if (!o.quiet)
@@ -3579,6 +3749,7 @@ static int cli_main(int argc, char **argv)
                     nfiles, b.cnt[0], b.cnt[1], b.cnt[2] + b.cnt[3], b.cnt[4], b.fail);
         return b.fail ? 1 : 0;
     }
+
     for (int i = 0; i < nfiles; i++) {
         const char *src = argv[optind + i];
         char dst[4096];
@@ -3589,6 +3760,7 @@ static int cli_main(int argc, char **argv)
                 fprintf(stderr, "[%d/%d] %s -> %s\n", i + 1, nfiles, src, dst);
         } else
             snprintf(dst, sizeof dst, "%s", argv[optind + 1]);
+
         Result r;
         prog.t0 = now(); /* here, not in fit_file: batch workers share prog */
         fit_file(&o, src, dst, &r);
@@ -3596,6 +3768,7 @@ static int cli_main(int argc, char **argv)
             print_json(src, dst, &r);
         if (r.status < 0 && !(o.quiet && o.json))
             fprintf(stderr, "%spngfit: %s: %s\n", prog.prefix, src, r.msg);
+
         if (r.status < 0)
             nfail++;
         else if (r.status == 0)
@@ -3607,6 +3780,7 @@ static int cli_main(int argc, char **argv)
         else
             nother++;
     }
+
     if (outdir && !o.quiet)
         fprintf(stderr,
                 "%d file(s): %d exact, %d already fit, %d smaller than target, %d at their minimum, "
@@ -3660,6 +3834,7 @@ EMSCRIPTEN_KEEPALIVE int pngfit_start(int argc, char **argv)
         rc);
     return 0;
 #endif
+
     WebRun *r = xmalloc(sizeof *r);
     r->argc = argc;
     r->argv = xmalloc((argc + 1) * sizeof(char *));
@@ -3668,6 +3843,7 @@ EMSCRIPTEN_KEEPALIVE int pngfit_start(int argc, char **argv)
         strcpy(r->argv[i], argv[i]);
     }
     r->argv[argc] = NULL;
+
     pthread_t t;
     if (pthread_create(&t, NULL, web_thread, r))
         return -1;

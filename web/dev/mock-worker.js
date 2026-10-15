@@ -1,7 +1,9 @@
 /* Stand-in for worker.js (page loaded with ?mock): plays a run without the wasm build,
  * so the page can be checked in a browser before Emscripten is installed. */
 'use strict';
+
 postMessage({ type: 'ready', threads: 2 });
+
 const phases = [
   ['analysing', 0],
   ['filter probe', 16],
@@ -12,11 +14,13 @@ const phases = [
   ['exact landing', 0],
   ['writing', 24],
 ];
+
 onmessage = (event) => {
   const { bytes, args } = event.data;
   postMessage({ type: 'log', line: 'mock run: ' + args.join(' ') });
-  let i = 0,
-    done = 0;
+  let i = 0;
+  let done = 0;
+
   const step = () => {
     if (i === phases.length) {
       const json = {
@@ -33,6 +37,7 @@ onmessage = (event) => {
       postMessage({ type: 'result', rc: 0, json, bytes }, [bytes]);
       return;
     }
+
     const [label, total] = phases[i];
     postMessage({ type: 'progress', label, done, total, seconds: i });
     done += Math.max(1, Math.ceil(total / 4));

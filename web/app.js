@@ -52,6 +52,7 @@ function pick(f) {
     if (file && file.url) URL.revokeObjectURL(file.url);
     resultUrl = null;
     file = { name: f.name, bytes: buf, url: URL.createObjectURL(new Blob([buf], { type: 'image/png' })) };
+
     const img = new Image();
     img.onload = () => {
       $('fileinfo').textContent = `${f.name}, ${img.naturalWidth}x${img.naturalHeight}, ${fmtBytes(buf.byteLength)}`;
@@ -61,12 +62,14 @@ function pick(f) {
         `${f.name}, ${fmtBytes(buf.byteLength)}: the browser cannot show it, pngfit may still read it`;
     };
     img.src = file.url;
+
     $('go').disabled = false;
     $('result').hidden = true;
   });
 }
 
 $('file').addEventListener('change', (e) => pick(e.target.files[0]));
+
 const drop = $('drop');
 ['dragenter', 'dragover'].forEach((t) =>
   drop.addEventListener(t, (e) => {
@@ -105,6 +108,7 @@ $('go').addEventListener('click', () => {
     $('size').focus();
     return;
   }
+
   $('go').disabled = true;
   $('result').hidden = true;
   $('work').hidden = false;
@@ -112,11 +116,13 @@ $('go').addEventListener('click', () => {
   $('phase').textContent = 'starting';
   $('phase').className = '';
   $('bar').removeAttribute('value');
+
   started = performance.now();
   timer = setInterval(() => {
     const s = (performance.now() - started) / 1000;
     $('elapsed').textContent = `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
   }, 500);
+
   const copy = file.bytes.slice(0); // the worker gets its own copy; we keep ours for "before"
   worker.postMessage({ type: 'run', bytes: copy, args: args() }, [copy]);
 });
@@ -134,6 +140,7 @@ function finish(m) {
     $('phase').className = 'warn';
     return;
   }
+
   $('work').hidden = true;
   const verdict = {
     exact: ['exact', 'exact'],
@@ -151,17 +158,20 @@ function finish(m) {
     html += stat(j.time.toFixed(1) + ' s', 'time');
   }
   $('stats').innerHTML = html;
+
   // a run that left the file alone showed the original itself as the result: keep that one
   if (resultUrl && resultUrl !== file.url) URL.revokeObjectURL(resultUrl);
   resultUrl = m.bytes ? URL.createObjectURL(new Blob([m.bytes], { type: 'image/png' })) : file.url;
   $('before').src = file.url;
   $('after').src = resultUrl;
+
   const base = file.name.replace(/\.a?png$/i, '');
   $('download').href = resultUrl;
   $('download').download = `${base}_${j.size}B.png`;
   $('download').hidden = !m.bytes;
   $('diffrow').hidden = !m.bytes;
   if (!m.bytes) $('diffmode').checked = false;
+
   diffFor = null;
   $('result').hidden = false;
   showDiff();
@@ -181,9 +191,9 @@ const HEAT = (() => {
   ];
   const lut = new Uint8Array(256 * 3);
   for (let v = 0; v < 256; v++) {
-    const x = (v / 255) * (stops.length - 1),
-      i = Math.min(stops.length - 2, Math.floor(x)),
-      f = x - i;
+    const x = (v / 255) * (stops.length - 1);
+    const i = Math.min(stops.length - 2, Math.floor(x));
+    const f = x - i;
     for (let c = 0; c < 3; c++) lut[v * 3 + c] = Math.round(stops[i][c] + (stops[i + 1][c] - stops[i][c]) * f);
   }
   return lut;
@@ -205,6 +215,7 @@ async function drawDiff() {
   if (diffFor === resultUrl) return;
   const want = resultUrl;
   $('legend').textContent = 'working out the difference...';
+
   let a, b;
   try {
     [a, b] = await Promise.all([pixelsOf(file.url), pixelsOf(want)]);
@@ -212,17 +223,19 @@ async function drawDiff() {
     $('legend').textContent = 'This browser cannot decode the images to compare them.';
     return;
   }
+
   if (want !== resultUrl) return; // a newer result arrived meanwhile
   if (a.width !== b.width || a.height !== b.height) {
     $('legend').textContent = 'The two images differ in size, so there is nothing to compare.';
     return;
   }
-  const n = a.width * a.height,
-    d = new Uint8Array(n),
-    A = a.data,
-    B = b.data;
-  let max = 0,
-    changed = 0;
+
+  const n = a.width * a.height;
+  const d = new Uint8Array(n);
+  const A = a.data;
+  const B = b.data;
+  let max = 0;
+  let changed = 0;
   for (let i = 0, p = 0; i < n; i++, p += 4) {
     if (A[p + 3] === 0 && B[p + 3] === 0) continue;
     const m = Math.max(
@@ -235,12 +248,13 @@ async function drawDiff() {
     if (m) changed++;
     if (m > max) max = m;
   }
+
   const canvas = $('diff');
   canvas.width = a.width;
   canvas.height = a.height;
   const g = canvas.getContext('2d');
-  const out = g.createImageData(a.width, a.height),
-    O = out.data;
+  const out = g.createImageData(a.width, a.height);
+  const O = out.data;
   for (let i = 0, p = 0; i < n; i++, p += 4) {
     const v = max ? Math.round((d[i] * 255) / max) * 3 : 0;
     O[p] = HEAT[v];
@@ -248,6 +262,7 @@ async function drawDiff() {
     O[p + 2] = HEAT[v + 2];
     O[p + 3] = 255;
   }
+
   g.putImageData(out, 0, 0);
   diffFor = want;
   $('legend').textContent =
@@ -270,13 +285,14 @@ $('diffmode').addEventListener('change', showDiff);
 // Fitted: the whole image on screen, no taller than 75 % of the window. At 1:1: its own size, a small
 // image centred, a large one scrolling. Pixels show as squares only when enlarged.
 function layout() {
-  const img = $('before'),
-    stage = $('stage'),
-    c = $('compare'),
-    viewer = $('viewer');
-  const zoomed = $('zoom').checked,
-    w = img.naturalWidth,
-    h = img.naturalHeight;
+  const img = $('before');
+  const stage = $('stage');
+  const c = $('compare');
+  const viewer = $('viewer');
+  const zoomed = $('zoom').checked;
+  const w = img.naturalWidth;
+  const h = img.naturalHeight;
+
   c.classList.toggle('zoomed', zoomed);
   viewer.style.maxWidth = '';
   if (w && h) {
@@ -298,8 +314,8 @@ function setSplit(v) {
 
 // at 1:1, bring the boundary into view (and, the first time, the middle of the image)
 function reveal(middle) {
-  const c = $('compare'),
-    stage = $('stage');
+  const c = $('compare');
+  const stage = $('stage');
   c.scrollLeft = (stage.offsetWidth * $('split').value) / 100 - c.clientWidth / 2;
   if (middle) c.scrollTop = (stage.offsetHeight - c.clientHeight) / 2;
 }
@@ -314,11 +330,14 @@ $('before').addEventListener('error', () => {
   $('viewer').hidden = true;
   $('noview').hidden = false;
 });
+
 window.addEventListener('resize', layout);
+
 $('split').addEventListener('input', (e) => {
   setSplit(e.target.value);
   if ($('zoom').checked) reveal(false);
 });
+
 // press anywhere on the image and drag: the boundary follows, even outside the panel
 // (scrollbars are not part of the stage, so they still scroll)
 function splitAt(e) {
@@ -337,6 +356,7 @@ $('stage').addEventListener('pointermove', (e) => {
   if ($('stage').hasPointerCapture(e.pointerId)) splitAt(e);
 });
 $('stage').addEventListener('dragstart', (e) => e.preventDefault());
+
 $('zoom').addEventListener('change', (e) => {
   layout();
   if (e.target.checked) reveal(true);

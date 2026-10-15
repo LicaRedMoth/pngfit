@@ -9,6 +9,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t n)
 {
     uint8_t *d = malloc(n ? n : 1);
     memcpy(d, data, n);
+
     for (size_t i = 8; i + 12 <= n;) { /* fresh checksums, so mutations reach past them */
         uint32_t len = be32(d + i);
         if (len > n - i - 12)
@@ -16,6 +17,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t n)
         put32(d + i + 8 + len, (uint32_t)crc32(0, d + i + 4, 4 + len));
         i += 12 + (size_t)len;
     }
+
     Arena A = {NULL};
     arena = &A;
     if (!setjmp(fail_jmp)) {
@@ -28,6 +30,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t n)
                 const Chunk *c = &g.ch[i];
                 uint8_t nb[8];
                 char nm[128];
+
                 chunk_category(c);
                 if (red && (!strcmp(c->type, "sBIT") || !strcmp(c->type, "bKGD")))
                     rewrite_for_reduction(c, red, oldC, g.C, g.depth, nb);
@@ -36,6 +39,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t n)
             }
         }
     }
+
     arena_free();
     arena = NULL;
     free(d);

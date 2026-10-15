@@ -17,6 +17,15 @@ if (self.name === 'em-pthread') {
   main();
 }
 
+// a file that may not be there: reading or removing it is allowed to fail
+function tryFS(action) {
+  try {
+    return action();
+  } catch {
+    return null;
+  }
+}
+
 function main() {
   const threaded = self.crossOriginIsolated === true; // SharedArrayBuffer is there only then
   const script = threaded ? 'pngfit.js' : 'pngfit-st.js';
@@ -66,16 +75,13 @@ function main() {
       postMessage({ type: 'error', message: 'already running' });
       return;
     }
+
     busy = true;
     json = null;
-    const inPath = '/in.png',
-      outPath = '/out.png';
+    const inPath = '/in.png';
+    const outPath = '/out.png';
     mod.FS.writeFile(inPath, new Uint8Array(msg.bytes));
-    try {
-      mod.FS.unlink(outPath);
-    } catch {
-      /* no previous output */
-    }
+    tryFS(() => mod.FS.unlink(outPath));
 
     const args = [
       'pngfit',
@@ -91,25 +97,13 @@ function main() {
     ptrs.forEach((p, i) => mod.setValue(argv + 4 * i, p, 'i32'));
 
     mod.onDone = (rc) => {
-      let out = null;
-      try {
-        out = mod.FS.readFile(outPath);
-      } catch {
-        /* nothing written: skipped or failed */
-      }
-      try {
-        mod.FS.unlink(inPath);
-      } catch {
-        /* already gone */
-      }
-      try {
-        mod.FS.unlink(outPath);
-      } catch {
-        /* never written */
-      }
+      const out = tryFS(() => mod.FS.readFile(outPath)); // none when pngfit skipped the file or failed
+      tryFS(() => mod.FS.unlink(inPath));
+      tryFS(() => mod.FS.unlink(outPath));
       busy = false;
       postMessage({ type: 'result', rc, json, bytes: out ? out.buffer : null }, out ? [out.buffer] : []);
     };
+
     const started = mod._pngfit_start(args.length, argv);
     ptrs.forEach((p) => mod._free(p)); // pngfit_start keeps its own copies
     mod._free(argv);
