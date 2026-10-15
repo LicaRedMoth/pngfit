@@ -46,3 +46,6 @@ video/
 .directory
 .DS_Store
 Thumbs.db
+
+# fuzzing: the fuzzer binary, its corpus and any crashing inputs (tools/fuzz.sh)
+fuzz/
