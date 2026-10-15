@@ -52,7 +52,7 @@
 #include <unistd.h>
 #include <zlib.h>
 
-#define VERSION "1.1.0"
+#define VERSION "1.1.1"
 
 /* lets the compiler check every call's format against its arguments */
 #if defined(__MINGW_PRINTF_FORMAT)
