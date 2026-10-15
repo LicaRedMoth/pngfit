@@ -307,9 +307,11 @@ deploying it on a static host.
 | `tools/bench.py` | benchmark on a dataset sample: `PNGFIT_DATASET=/path tools/bench.py out.csv` |
 | `tools/rd_data.py`, `tools/charts.py` | the data and charts in this README |
 | `tools/prototype/` | the original Python prototype, and `make_video.py`, which renders the demo video |
+| `tools/fuzz.c`, `tools/fuzz.sh` | fuzzer for the PNG reader under AddressSanitizer: `tools/fuzz.sh [seconds]` (clang) |
 | `web/` | the browser version: page, worker, Emscripten build script |
 | `packaging/aur/` | PKGBUILDs for the AUR: `pngfit` (releases) and `pngfit-git` |
-| `.github/workflows/` | CI: `check.yml` on every push, `release.yml` builds the release files from a version tag |
+| `.github/workflows/` | CI: `check.yml` on every push (builds, self-tests, formatting, sanitizers, fuzzing), `release.yml` builds the release files from a version tag |
+| `.clang-format`, `ruff.toml`, `.prettierrc.json` | code style for C, Python, and JavaScript with HTML; CI checks all three |
 | `pngfit.1` | the manual page |
 | `vendor/` | libdeflate and zlib as submodules, links to upstream: for the browser and Windows builds only |
 

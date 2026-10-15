@@ -1,4 +1,5 @@
-# Builds pngfit on Linux, macOS, Windows and as WebAssembly, and runs the self-test on each.
+# Builds pngfit on Linux, macOS, Windows and as WebAssembly and runs the self-test on each;
+# checks the formatting of every language and runs the self-test and a fuzzer under sanitizers.
 name: check
 
 on:
@@ -94,3 +95,45 @@ jobs:
         run: web/build.sh
       - name: Same bytes as the native build
         run: web/dev/node_check.sh docs/img/*.png
+
+  lint:
+    name: Formatting and lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: C (clang-format, the version the code was formatted with)
+        run: pipx run clang-format==22.1.8 --dry-run --Werror pngfit.c tools/fuzz.c
+      - name: Python (ruff)
+        run: |
+          pipx run ruff==0.17.0 format --check .
+          pipx run ruff==0.17.0 check .
+      - name: JavaScript and HTML (prettier)
+        run: npx --yes prettier@3.9.10 --check .
+      - name: Shell (shellcheck)
+        run: shellcheck web/build.sh web/dev/*.sh tools/fuzz.sh
+
+  sanitizers:
+    name: Sanitizers and fuzzing
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: true
+      - name: Dependencies
+        run: sudo apt-get update && sudo apt-get install -y python3-numpy python3-pil
+      - name: Self-test under AddressSanitizer and UndefinedBehaviorSanitizer
+        env:
+          ASAN_OPTIONS: detect_leaks=0
+        run: |
+          clang -O1 -g -fno-omit-frame-pointer -fsanitize=address,undefined -fno-sanitize-recover=undefined \
+            -std=gnu11 -Ivendor/libdeflate -Ivendor/zlib -o pngfit-asan pngfit.c vendor/libdeflate/lib/*.c \
+            vendor/libdeflate/lib/x86/cpu_features.c vendor/libdeflate/lib/arm/cpu_features.c \
+            vendor/zlib/{adler32,crc32,inflate,inffast,inftrees,uncompr,zutil}.c -lpthread -lm
+          python3 tools/selftest.py ./pngfit-asan
+      - name: Fuzz the PNG reader for a minute
+        run: tools/fuzz.sh 60
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: fuzz-crash
+          path: fuzz/crash-*
