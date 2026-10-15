@@ -17,15 +17,22 @@ static __thread struct libdeflate_compressor *comp[13];
 /* returns fragment size, 0 on error. out must hold libdeflate bound + 8 bytes */
 size_t fit_strip(const uint8_t *in, size_t n, int level, uint8_t *out, size_t cap, uint8_t *scratch)
 {
-    if (level < 1 || level > 12) return 0;
-    if (!comp[level]) comp[level] = libdeflate_alloc_compressor(level);
+    if (level < 1 || level > 12)
+        return 0;
+    if (!comp[level])
+        comp[level] = libdeflate_alloc_compressor(level);
     size_t m = libdeflate_deflate_compress(comp[level], in, n, out, cap - 8);
-    if (!m) return 0;
+    if (!m)
+        return 0;
 
-    z_stream s; memset(&s, 0, sizeof s);
-    if (inflateInit2(&s, -15) != Z_OK) return 0;
-    s.next_in = out; s.avail_in = (uInt)m;
-    s.next_out = scratch; s.avail_out = (uInt)n + 1;
+    z_stream s;
+    memset(&s, 0, sizeof s);
+    if (inflateInit2(&s, -15) != Z_OK)
+        return 0;
+    s.next_in = out;
+    s.avail_in = (uInt)m;
+    s.next_out = scratch;
+    s.avail_out = (uInt)n + 1;
     uint64_t last_hdr = 0, end_bit = 0;
     int ret;
     /* bit position of the very first block header is 0 */
@@ -35,31 +42,47 @@ size_t fit_strip(const uint8_t *in, size_t n, int level, uint8_t *out, size_t ca
      * by then inflate has already discarded the padding up to a byte boundary. */
     for (;;) {
         ret = inflate(&s, Z_BLOCK);
-        if (ret == Z_STREAM_END) break;
-        if (ret != Z_OK) { inflateEnd(&s); return 0; }
+        if (ret == Z_STREAM_END)
+            break;
+        if (ret != Z_OK) {
+            inflateEnd(&s);
+            return 0;
+        }
         if (s.data_type & 128) {
             uint64_t pos = (uint64_t)(s.next_in - out) * 8 - (s.data_type & 7);
-            if (s.data_type & 64) end_bit = pos;   /* end of the final block */
-            else last_hdr = pos;                   /* header of the next block */
+            if (s.data_type & 64)
+                end_bit = pos;   /* end of the final block */
+            else
+                last_hdr = pos;                   /* header of the next block */
         }
     }
-    if (!end_bit) { inflateEnd(&s); return 0; }
+    if (!end_bit) {
+        inflateEnd(&s);
+        return 0;
+    }
     inflateEnd(&s);
-    if (s.total_out != n) return 0;
+    if (s.total_out != n)
+        return 0;
 
     out[last_hdr >> 3] &= (uint8_t)~(1u << (last_hdr & 7));   /* clear BFINAL */
     size_t bytes = (size_t)((end_bit + 7) >> 3);
     unsigned used = end_bit & 7;                                /* bits used in last byte */
-    if (used) out[bytes - 1] &= (uint8_t)((1u << used) - 1);    /* zero the padding */
+    if (used)
+        out[bytes - 1] &= (uint8_t)((1u << used) - 1);    /* zero the padding */
     /* empty stored block: 3 header bits (all zero), align, LEN=0, NLEN=0xFFFF */
-    if (used == 0 || used > 5) out[bytes++] = 0;                /* header needs its own byte */
-    out[bytes++] = 0; out[bytes++] = 0; out[bytes++] = 0xFF; out[bytes++] = 0xFF;
+    if (used == 0 || used > 5)
+        out[bytes++] = 0;                /* header needs its own byte */
+    out[bytes++] = 0;
+    out[bytes++] = 0;
+    out[bytes++] = 0xFF;
+    out[bytes++] = 0xFF;
     return bytes;
 }
 
 size_t fit_bound(size_t n)
 {
     static struct libdeflate_compressor *c;
-    if (!c) c = libdeflate_alloc_compressor(12);
+    if (!c)
+        c = libdeflate_alloc_compressor(12);
     return libdeflate_deflate_compress_bound(c, n) + 8;
 }

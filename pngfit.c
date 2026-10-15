@@ -130,7 +130,10 @@ static int is_dir(const char *path)
 }
 
 #define PATH_SEP '\\'
-static int is_sep(char c) { return c == '/' || c == '\\' || c == ':'; } /* ':' ends a drive, C:x.png */
+static int is_sep(char c)
+{
+    return c == '/' || c == '\\' || c == ':';
+} /* ':' ends a drive, C:x.png */
 
 static int file_id(const char *path, BY_HANDLE_FILE_INFORMATION *fi)
 {
@@ -213,7 +216,10 @@ static int is_dir(const char *path)
 }
 
 #define PATH_SEP '/'
-static int is_sep(char c) { return c == '/'; }
+static int is_sep(char c)
+{
+    return c == '/';
+}
 
 static int same_file(const char *a, const char *b)
 {
@@ -381,8 +387,8 @@ static void prog_draw_locked(void)
         double t = now();
         if (t - prog.last_line >= 0.2 || prog.done == prog.total) {
             prog.last_line = t;
-            fprintf(stderr, "@progress %s\t%lld\t%lld\t%.1f\n", prog.label, (long long)prog.done,
-                    (long long)prog.total, t - prog.t0);
+            fprintf(stderr, "@progress %s\t%lld\t%lld\t%.1f\n", prog.label, (long long)prog.done, (long long)prog.total,
+                    t - prog.t0);
             fflush(stderr);
         }
         return;
@@ -404,8 +410,7 @@ static void prog_draw_locked(void)
             p += 3;
         }
         bar[p] = 0;
-        n += snprintf(line + n, sizeof line - n, " %s %lld/%lld", bar, (long long)prog.done,
-                      (long long)prog.total);
+        n += snprintf(line + n, sizeof line - n, " %s %lld/%lld", bar, (long long)prog.done, (long long)prog.total);
         if (prog.done) {
             fmt_time(el, (now() - prog.ts) / prog.done * (prog.total - prog.done));
             n += snprintf(line + n, sizeof line - n, "  ETA %s", el);
@@ -544,8 +549,7 @@ static void png_parse(Png *g, const uint8_t *d, size_t n)
         int bad = crc != be32(d + i + 8 + len);
         i += 12 + (size_t)len;
         if (bad) {
-            if (isupper((unsigned char)c.type[0]))
-            {
+            if (isupper((unsigned char)c.type[0])) {
                 char t[5];
                 for (int j = 0; j < 4; j++) /* a damaged type may not even be text */
                     t[j] = isalpha((unsigned char)c.type[j]) ? c.type[j] : '?';
@@ -581,12 +585,22 @@ static void png_parse(Png *g, const uint8_t *d, size_t n)
     if (h[10] || h[11] || g->interlace > 1)
         fail("unknown compression, filter or interlace method");
     switch (g->ctype) {
-    case 0: g->C = 1; break;
-    case 2: g->C = 3; break;
-    case 4: g->C = 2; break;
-    case 6: g->C = 4; break;
-    case 3: fail("palette images are not supported: pngfit keeps truecolor (a palette is pngquant's trade-off)");
-    default: fail("bad colour type %d", g->ctype);
+    case 0:
+        g->C = 1;
+        break;
+    case 2:
+        g->C = 3;
+        break;
+    case 4:
+        g->C = 2;
+        break;
+    case 6:
+        g->C = 4;
+        break;
+    case 3:
+        fail("palette images are not supported: pngfit keeps truecolor (a palette is pngquant's trade-off)");
+    default:
+        fail("bad colour type %d", g->ctype);
     }
     if (g->depth != 8 && g->depth != 16)
         fail("bit depth %d is not supported (8 or 16)", g->depth);
@@ -873,7 +887,7 @@ static uint32_t rewrite_for_reduction(const Chunk *c, int red, int oldC, int new
         int hasA = oldC == 2 || oldC == 4, colour = oldC >= 3, m = 0;
         if (newC == 1 || newC == 2) /* grey: the grey entry, or the largest colour one */
             out[m++] = colour ? (uint8_t)(c->data[0] > c->data[1] ? (c->data[0] > c->data[2] ? c->data[0] : c->data[2])
-                                                              : (c->data[1] > c->data[2] ? c->data[1] : c->data[2]))
+                                                                  : (c->data[1] > c->data[2] ? c->data[1] : c->data[2]))
                               : c->data[0];
         else
             for (int i = 0; i < 3; i++)
@@ -1024,8 +1038,8 @@ static void icc_name(const Chunk *c, char *out, size_t outn)
 
 /* One strip as a raw-DEFLATE fragment that joins with others: inflate(Z_BLOCK) finds the header of
  * libdeflate's BFINAL block (zlib's gzjoin.c trick); clear that bit, append an empty stored block. */
-static size_t fit_strip(struct libdeflate_compressor *comp, const uint8_t *in, size_t n, uint8_t *out,
-                        size_t cap, uint8_t *scratch)
+static size_t fit_strip(struct libdeflate_compressor *comp, const uint8_t *in, size_t n, uint8_t *out, size_t cap,
+                        uint8_t *scratch)
 {
     size_t m = libdeflate_deflate_compress(comp, in, n, out, cap - 8);
     if (!m)
@@ -1058,7 +1072,7 @@ static size_t fit_strip(struct libdeflate_compressor *comp, const uint8_t *in, s
     inflateEnd(&s);
     if (!end_bit || s.total_out != n)
         return 0;
-    out[last_hdr >> 3] &= (uint8_t) ~(1u << (last_hdr & 7));
+    out[last_hdr >> 3] &= (uint8_t)~(1u << (last_hdr & 7));
     size_t bytes = (size_t)((end_bit + 7) >> 3);
     unsigned used = end_bit & 7;
     if (used)
@@ -1095,7 +1109,10 @@ typedef struct {
     uint8_t *out_f, *rec, *tmp_rec, *tmp_res, *rung, *frag, *scratch;
     size_t frag_cap;
     int32_t *srank;
-    struct SK { double key; int32_t idx; } *skeys;
+    struct SK {
+        double key;
+        int32_t idx;
+    } *skeys;
     int sk, sseed; /* strip/seed the srank buffer holds */
 } Work;
 
@@ -1134,10 +1151,14 @@ static inline int floordiv(int a, int b) /* floor(a / b), b > 0 */
 static inline int predict(int f, int a, int b, int c)
 {
     switch (f) {
-    case 0: return 0;
-    case 1: return a;
-    case 2: return b;
-    case 3: return (a + b) >> 1;
+    case 0:
+        return 0;
+    case 1:
+        return a;
+    case 2:
+        return b;
+    case 3:
+        return (a + b) >> 1;
     default: {
         int p = a + b - c, pa = abs(p - a), pb = abs(p - b), pc = abs(p - c);
         return (pa <= pb && pa <= pc) ? a : (pb <= pc ? b : c);
@@ -1157,8 +1178,8 @@ static uint8_t dead_zone(int q)
 
 /* One row with filter f, predicting from `up` and the row's own rounded bytes; a step that would leave
  * 0..255 keeps the byte exact. Returns the row-filter heuristic, the sum of log2(1 + |residual|). */
-static double quant_row(const Fit *F, int W, const uint8_t *src, const uint8_t *up, const uint8_t *rung,
-                        int lossless, int f, uint8_t *rec, uint8_t *res)
+static double quant_row(const Fit *F, int W, const uint8_t *src, const uint8_t *up, const uint8_t *rung, int lossless,
+                        int f, uint8_t *rec, uint8_t *res)
 {
     const int bpp = F->bpp, ncol = (F->C - 1) * F->bps; /* with alpha, colour bytes come first */
     double cost = 0;
@@ -1990,7 +2011,9 @@ static void write_result(Fit *F, const Png *g, const Choice *ch, const uint8_t *
     if (res->status == 4 && res->size == size)
         res->status = 0;
     logmsg("wrote %s: %lld B (target %lld, %s)", dst, (long long)b.n, (long long)size,
-           b.n == (size_t)size ? "EXACT" : res->status == 4 ? "the minimum" : "not exact");
+           b.n == (size_t)size ? "EXACT"
+           : res->status == 4  ? "the minimum"
+                               : "not exact");
     if (g->bps == 1)
         logmsg("PSNR %.2f dB, max error %d, pixels changed %.1f%%", res->psnr, maxe, res->changed * 100);
     else
@@ -2178,7 +2201,8 @@ static int fit_once(const Opts *o, const Png *g, const uint8_t *head, size_t hea
         describe_rung(F, F->L - 1, rd, sizeof rd);
         logmsg("WARNING: %lld B cannot be reached: the smallest pngfit can make of this image is %lld B (%s "
                "everywhere, one strip, %s filter); writing that",
-               (long long)size, (long long)(best + fixed), rd, (const char *[]){"None", "Sub", "Up", "Average", "Paeth"}[bf]);
+               (long long)size, (long long)(best + fixed), rd,
+               (const char *[]){"None", "Sub", "Up", "Average", "Paeth"}[bf]);
         Choice *ch = acalloc(K * sizeof(Choice));
         for (int k = 0; k < K; k++)
             ch[k] = (Choice){F->maxP[k], 0};
@@ -2632,8 +2656,7 @@ static int fit_once(const Opts *o, const Png *g, const uint8_t *head, size_t hea
                             }
                         }
                     if (landed)
-                        logmsg("  landed in strip %d alone (seed %d) (%lld probes)", k, ch[k].seed,
-                               (long long)probes);
+                        logmsg("  landed in strip %d alone (seed %d) (%lld probes)", k, ch[k].seed, (long long)probes);
                 }
             }
         }
@@ -2799,9 +2822,9 @@ static void fit_file(const Opts *o, const char *src, const char *dst, Result *re
     int oldC = g.C, red = o->no_reduce ? 0 : reduce_format(&g);
     if (red) {
         static const char *CT[] = {"grey", "", "RGB", "", "grey+alpha", "", "RGBA"};
-        logmsg("lossless format reduction: %s%s%s -> %d-bit %s, same pixels", red & R_ALPHA ? "alpha was opaque everywhere; " : "",
-               red & R_GREY ? "colour was grey everywhere; " : "", red & R_16TO8 ? "16-bit samples were 8-bit values; " : "",
-               g.depth, CT[g.ctype]);
+        logmsg("lossless format reduction: %s%s%s -> %d-bit %s, same pixels",
+               red & R_ALPHA ? "alpha was opaque everywhere; " : "", red & R_GREY ? "colour was grey everywhere; " : "",
+               red & R_16TO8 ? "16-bit samples were 8-bit values; " : "", g.depth, CT[g.ctype]);
     }
 
     if (o->free_alpha) {
@@ -2832,8 +2855,8 @@ static void fit_file(const Opts *o, const char *src, const char *dst, Result *re
     for (int i = 0; i < g.nch; i++) {
         const Chunk *c = &g.ch[i];
         if (!strcmp(c->type, "IHDR") || !strcmp(c->type, "IDAT") || !strcmp(c->type, "IEND") ||
-            !strcmp(c->type, "PLTE") || (g.anim && (!strcmp(c->type, "acTL") || !strcmp(c->type, "fcTL") ||
-                                                    !strcmp(c->type, "fdAT"))))
+            !strcmp(c->type, "PLTE") ||
+            (g.anim && (!strcmp(c->type, "acTL") || !strcmp(c->type, "fcTL") || !strcmp(c->type, "fdAT"))))
             continue; /* structure, rebuilt on output */
         int cat = chunk_category(c), keep = cat && (o->keep_mask & cat);
         for (int j = 0; j < o->nkeep_names && cat; j++)
@@ -2841,8 +2864,8 @@ static void fit_file(const Opts *o, const char *src, const char *dst, Result *re
         for (int j = 0; j < o->nstrip_names; j++)
             keep &= !!strcmp(o->strip_names[j], c->type);
         char item[64];
-        snprintf(item, sizeof item, "%s%s[%s] %u B", (keep ? kept.n : drop.n) ? ", " : "", c->type,
-                 cat_name(cat), c->len + 12);
+        snprintf(item, sizeof item, "%s%s[%s] %u B", (keep ? kept.n : drop.n) ? ", " : "", c->type, cat_name(cat),
+                 c->len + 12);
         buf_put(keep ? &kept : &drop, item, strlen(item));
         if (keep && red && (!strcmp(c->type, "sBIT") || !strcmp(c->type, "bKGD"))) {
             uint8_t nb[8];
@@ -3191,8 +3214,8 @@ static void result_line(const char *tag, const char *src, const char *dst, const
                 (long long)(r->target - r->size), pe);
         break;
     case 4:
-        fprintf(stderr, "%s %s -> %s: %lld B is the smallest possible (target %lld B unreachable), %s\n", tag, src,
-                dst, (long long)r->size, (long long)r->target, pe);
+        fprintf(stderr, "%s %s -> %s: %lld B is the smallest possible (target %lld B unreachable), %s\n", tag, src, dst,
+                (long long)r->size, (long long)r->target, pe);
         break;
     default:
         fprintf(stderr, "%s %s: FAILED: %s\n", tag, src, r->msg);
@@ -3278,25 +3301,55 @@ static int cli_main(int argc, char **argv)
     o.rounds = 4;
     o.jobs = ncpu();
     const char *outdir = NULL, *suffix = "";
-    enum { O_SUFFIX = 256, O_LALPHA, O_FILTER, O_RSW, O_LADDER, O_MASK, O_LEVEL, O_STRIP, O_ROUNDS, O_JSON,
-           O_NOREDUCE, O_ALPHA, O_FAST, O_EXPLORE, O_NOTHIN, O_PLINES, O_NEAREST };
+    enum {
+        O_SUFFIX = 256,
+        O_LALPHA,
+        O_FILTER,
+        O_RSW,
+        O_LADDER,
+        O_MASK,
+        O_LEVEL,
+        O_STRIP,
+        O_ROUNDS,
+        O_JSON,
+        O_NOREDUCE,
+        O_ALPHA,
+        O_FAST,
+        O_EXPLORE,
+        O_NOTHIN,
+        O_PLINES,
+        O_NEAREST
+    };
     o.max_error = -1;
     o.explore_level = 10;
-    static const struct option lo[] = {{"size", 1, 0, 's'},          {"outdir", 1, 0, 'o'},
-                                       {"suffix", 1, 0, O_SUFFIX},   {"keep", 1, 0, 'k'},          {"strip", 1, 0, 'x'},
-                                       {"preserve", 0, 0, 'p'},      {"lossy-alpha", 0, 0, O_LALPHA},
-                                       {"filter", 1, 0, O_FILTER},   {"row-switch", 1, 0, O_RSW},
-                                       {"ladder", 1, 0, O_LADDER},   {"mask", 1, 0, O_MASK},
-                                       {"level", 1, 0, O_LEVEL},     {"strip-rows", 1, 0, O_STRIP},
-                                       {"rounds", 1, 0, O_ROUNDS},   {"jobs", 1, 0, 'j'},
+    static const struct option lo[] = {{"size", 1, 0, 's'},
+                                       {"outdir", 1, 0, 'o'},
+                                       {"suffix", 1, 0, O_SUFFIX},
+                                       {"keep", 1, 0, 'k'},
+                                       {"strip", 1, 0, 'x'},
+                                       {"preserve", 0, 0, 'p'},
+                                       {"lossy-alpha", 0, 0, O_LALPHA},
+                                       {"filter", 1, 0, O_FILTER},
+                                       {"row-switch", 1, 0, O_RSW},
+                                       {"ladder", 1, 0, O_LADDER},
+                                       {"mask", 1, 0, O_MASK},
+                                       {"level", 1, 0, O_LEVEL},
+                                       {"strip-rows", 1, 0, O_STRIP},
+                                       {"rounds", 1, 0, O_ROUNDS},
+                                       {"jobs", 1, 0, 'j'},
                                        {"parallel", 1, 0, 'P'},
-                                       {"quiet", 0, 0, 'q'},         {"json", 0, 0, O_JSON},
-                                       {"no-reduce", 0, 0, O_NOREDUCE}, {"alpha", 0, 0, O_ALPHA},
-                                       {"max-error", 1, 0, 'e'},        {"fast", 0, 0, O_FAST},
+                                       {"quiet", 0, 0, 'q'},
+                                       {"json", 0, 0, O_JSON},
+                                       {"no-reduce", 0, 0, O_NOREDUCE},
+                                       {"alpha", 0, 0, O_ALPHA},
+                                       {"max-error", 1, 0, 'e'},
+                                       {"fast", 0, 0, O_FAST},
                                        {"explore-level", 1, 0, O_EXPLORE},
-                                       {"no-thin-strips", 0, 0, O_NOTHIN}, {"nearest", 0, 0, O_NEAREST},
+                                       {"no-thin-strips", 0, 0, O_NOTHIN},
+                                       {"nearest", 0, 0, O_NEAREST},
                                        {"progress-lines", 0, 0, O_PLINES},
-                                       {"version", 0, 0, 'V'},       {"help", 0, 0, 'h'},
+                                       {"version", 0, 0, 'V'},
+                                       {"help", 0, 0, 'h'},
                                        {0, 0, 0, 0}};
     int c, keep_set = 0;
     while ((c = getopt_long(argc, argv, "s:o:k:x:e:pj:P:qVh", lo, NULL)) != -1) {
@@ -3308,8 +3361,12 @@ static int cli_main(int argc, char **argv)
                 return 2;
             }
             break;
-        case 'o': outdir = optarg; break;
-        case O_SUFFIX: suffix = optarg; break;
+        case 'o':
+            outdir = optarg;
+            break;
+        case O_SUFFIX:
+            suffix = optarg;
+            break;
         case 'k':
             if (!keep_set)
                 o.keep_mask = 0;
@@ -3321,8 +3378,13 @@ static int cli_main(int argc, char **argv)
             if (parse_meta(&o, optarg, 1))
                 return 2;
             break;
-        case 'p': o.keep_mask = 255; keep_set = 1; break;
-        case O_LALPHA: o.lossy_alpha = 1; break;
+        case 'p':
+            o.keep_mask = 255;
+            keep_set = 1;
+            break;
+        case O_LALPHA:
+            o.lossy_alpha = 1;
+            break;
         case O_FILTER:
             o.filter = atoi(optarg);
             if (o.filter < -1 || o.filter > 4) {
@@ -3330,7 +3392,9 @@ static int cli_main(int argc, char **argv)
                 return 2;
             }
             break;
-        case O_RSW: o.row_switch = atof(optarg); break;
+        case O_RSW:
+            o.row_switch = atof(optarg);
+            break;
         case O_LADDER:
             if (!strcmp(optarg, "odd"))
                 o.ladder_kind = 0;
@@ -3354,21 +3418,53 @@ static int cli_main(int argc, char **argv)
                 }
             }
             break;
-        case O_MASK: o.mask = atof(optarg); break;
-        case O_NEAREST: o.nearest = 1; break;
-        case O_LEVEL: o.level = atoi(optarg); break;
-        case O_STRIP: o.strip = atoi(optarg); o.strip_set = 1; break;
-        case O_ROUNDS: o.rounds = atoi(optarg); break;
-        case 'j': o.jobs = atoi(optarg); break;
-        case 'P': o.parallel = atoi(optarg); break;
-        case 'q': o.quiet = 1; break;
-        case O_JSON: o.json = 1; break;
-        case O_NOREDUCE: o.no_reduce = 1; break;
-        case O_ALPHA: o.free_alpha = 1; break;
-        case O_FAST: o.level = 10; break;
-        case O_EXPLORE: o.explore_level = atoi(optarg); o.explore_set = 1; break;
-        case O_NOTHIN: o.no_thin = 1; break;
-        case O_PLINES: prog.lines = 1; break;
+        case O_MASK:
+            o.mask = atof(optarg);
+            break;
+        case O_NEAREST:
+            o.nearest = 1;
+            break;
+        case O_LEVEL:
+            o.level = atoi(optarg);
+            break;
+        case O_STRIP:
+            o.strip = atoi(optarg);
+            o.strip_set = 1;
+            break;
+        case O_ROUNDS:
+            o.rounds = atoi(optarg);
+            break;
+        case 'j':
+            o.jobs = atoi(optarg);
+            break;
+        case 'P':
+            o.parallel = atoi(optarg);
+            break;
+        case 'q':
+            o.quiet = 1;
+            break;
+        case O_JSON:
+            o.json = 1;
+            break;
+        case O_NOREDUCE:
+            o.no_reduce = 1;
+            break;
+        case O_ALPHA:
+            o.free_alpha = 1;
+            break;
+        case O_FAST:
+            o.level = 10;
+            break;
+        case O_EXPLORE:
+            o.explore_level = atoi(optarg);
+            o.explore_set = 1;
+            break;
+        case O_NOTHIN:
+            o.no_thin = 1;
+            break;
+        case O_PLINES:
+            prog.lines = 1;
+            break;
         case 'e': {
             char *end;
             long v = strtol(optarg, &end, 10);
@@ -3379,9 +3475,15 @@ static int cli_main(int argc, char **argv)
             o.max_error = (int)v;
             break;
         }
-        case 'V': puts("pngfit " VERSION); return 0;
-        case 'h': usage(stdout); return 0;
-        default: usage(stderr); return 2;
+        case 'V':
+            puts("pngfit " VERSION);
+            return 0;
+        case 'h':
+            usage(stdout);
+            return 0;
+        default:
+            usage(stderr);
+            return 2;
         }
     }
     if (o.size == -2) {
@@ -3414,8 +3516,15 @@ static int cli_main(int argc, char **argv)
     if (outdir && par > 1) {
         /* several files at once, each with its share of the threads; the per-file log
          * would interleave, so each file reports one line when it is done */
-        Batch b = {.fo = o, .in = argv + optind, .n = nfiles, .outdir = outdir, .suffix = suffix,
-                   .quiet = o.quiet, .json = o.json, .bar = !o.quiet && !prog.lines && stderr_tty(), .t0 = now(),
+        Batch b = {.fo = o,
+                   .in = argv + optind,
+                   .n = nfiles,
+                   .outdir = outdir,
+                   .suffix = suffix,
+                   .quiet = o.quiet,
+                   .json = o.json,
+                   .bar = !o.quiet && !prog.lines && stderr_tty(),
+                   .t0 = now(),
                    .mu = PTHREAD_MUTEX_INITIALIZER};
         b.fo.jobs = o.jobs / par > 0 ? o.jobs / par : 1;
         prog.quiet = 1;
@@ -3434,8 +3543,10 @@ static int cli_main(int argc, char **argv)
         if (b.bar)
             fputs("\r\x1b[K", stderr);
         if (!o.quiet)
-            fprintf(stderr, "%d file(s): %d exact, %d already fit, %d smaller than target, %d at their minimum, "
-                    "%d failed\n", nfiles, b.cnt[0], b.cnt[1], b.cnt[2] + b.cnt[3], b.cnt[4], b.fail);
+            fprintf(stderr,
+                    "%d file(s): %d exact, %d already fit, %d smaller than target, %d at their minimum, "
+                    "%d failed\n",
+                    nfiles, b.cnt[0], b.cnt[1], b.cnt[2] + b.cnt[3], b.cnt[4], b.fail);
         return b.fail ? 1 : 0;
     }
     for (int i = 0; i < nfiles; i++) {
@@ -3466,8 +3577,10 @@ static int cli_main(int argc, char **argv)
             nother++;
     }
     if (outdir && !o.quiet)
-        fprintf(stderr, "%d file(s): %d exact, %d already fit, %d smaller than target, %d at their minimum, "
-                "%d failed\n", nfiles, nexact, nskip, nother, nmin, nfail);
+        fprintf(stderr,
+                "%d file(s): %d exact, %d already fit, %d smaller than target, %d at their minimum, "
+                "%d failed\n",
+                nfiles, nexact, nskip, nother, nmin, nfail);
     return nfail ? 1 : 0;
 }
 
@@ -3495,7 +3608,12 @@ static void *web_thread(void *p)
         free(r->argv[i]);
     free(r->argv);
     free(r);
-    MAIN_THREAD_ASYNC_EM_ASM({ if (Module.onDone) Module.onDone($0); }, rc);
+    MAIN_THREAD_ASYNC_EM_ASM(
+        {
+            if (Module.onDone)
+                Module.onDone($0);
+        },
+        rc);
     return NULL;
 }
 
@@ -3503,7 +3621,12 @@ EMSCRIPTEN_KEEPALIVE int pngfit_start(int argc, char **argv)
 {
 #ifndef __EMSCRIPTEN_PTHREADS__ /* single-threaded fallback build: run here, report at once */
     int rc = cli_main(argc, argv);
-    MAIN_THREAD_ASYNC_EM_ASM({ if (Module.onDone) Module.onDone($0); }, rc);
+    MAIN_THREAD_ASYNC_EM_ASM(
+        {
+            if (Module.onDone)
+                Module.onDone($0);
+        },
+        rc);
     return 0;
 #endif
     WebRun *r = xmalloc(sizeof *r);
