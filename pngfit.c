@@ -54,6 +54,15 @@
 
 #define VERSION "1.1.0"
 
+/* lets the compiler check every call's format against its arguments */
+#if defined(__MINGW_PRINTF_FORMAT)
+#define PRINTF_LIKE(f, a) __attribute__((format(__MINGW_PRINTF_FORMAT, f, a)))
+#elif defined(__GNUC__)
+#define PRINTF_LIKE(f, a) __attribute__((format(printf, f, a)))
+#else
+#define PRINTF_LIKE(f, a)
+#endif
+
 /* Basics */
 
 static double now(void)
@@ -268,7 +277,7 @@ static void *xmalloc(size_t n)
 static _Thread_local jmp_buf fail_jmp;
 static _Thread_local char fail_msg[1024];
 
-static _Noreturn void fail(const char *fmt, ...)
+static _Noreturn PRINTF_LIKE(1, 2) void fail(const char *fmt, ...)
 {
     va_list ap;
     va_start(ap, fmt);
@@ -324,6 +333,8 @@ typedef struct {
 
 static void buf_put(Buf *b, const void *d, size_t n)
 {
+    if (!n) /* an empty chunk: memcpy may not see a null pointer, even for 0 bytes */
+        return;
     if (b->n + n > b->cap) {
         size_t cap = (b->n + n) * 2 + 256;
         uint8_t *p = amalloc(cap);
@@ -454,7 +465,7 @@ static void prog_clear(void)
     }
 }
 
-static void logmsg(const char *fmt, ...)
+static PRINTF_LIKE(1, 2) void logmsg(const char *fmt, ...)
 {
     if (prog.quiet)
         return;
@@ -613,8 +624,8 @@ static void png_parse(Png *g, const uint8_t *d, size_t n)
     int cap_pl = 4, nfctl = 0, seen_fdat = 0;
     g->pl = acalloc(cap_pl * sizeof(Plane));
     Plane *cur = NULL, *idat = NULL;
-    for (int i = 0; i < g->nch; i++) {
-        const Chunk *c = &g->ch[i];
+    for (int ci = 0; ci < g->nch; ci++) {
+        const Chunk *c = &g->ch[ci];
         int is_idat = !strcmp(c->type, "IDAT");
         if (!strcmp(c->type, "acTL") && !idat) {
             if (c->len != 8)
@@ -683,10 +694,10 @@ static void png_parse(Png *g, const uint8_t *d, size_t n)
         fail("no image data");
     if (g->anim && (uint32_t)nfctl != be32(g->actl))
         fail("broken APNG: acTL announces %u frames, the file has %d", be32(g->actl), nfctl);
-    for (int i = 0; i < g->npl; i++) {
-        if (!g->pl[i].z.n)
-            fail("broken APNG: frame %d has no image data", i);
-        g->pl[i].row = (size_t)g->pl[i].W * g->bpp;
+    for (int pi = 0; pi < g->npl; pi++) {
+        if (!g->pl[pi].z.n)
+            fail("broken APNG: frame %d has no image data", pi);
+        g->pl[pi].row = (size_t)g->pl[pi].W * g->bpp;
     }
 }
 
@@ -2754,12 +2765,13 @@ static void activity(const Png *g, Plane *pl, double mask)
 {
     size_t N = (size_t)pl->W * pl->H;
     float *l = amalloc(N * sizeof(float)), *l2 = amalloc(N * sizeof(float));
+    const int nc = g->C >= 3 ? 3 : 1; /* colour channels: luma from RGB, or the grey itself */
     for (size_t i = 0; i < N; i++) {
         const uint8_t *p = pl->px + i * g->bpp;
         float s[3];
-        for (int c = 0; c < (g->C >= 3 ? 3 : 1); c++)
+        for (int c = 0; c < nc; c++)
             s[c] = g->bps == 1 ? p[c] : ((p[2 * c] << 8) | p[2 * c + 1]) / 257.0f;
-        l[i] = g->C >= 3 ? 0.299f * s[0] + 0.587f * s[1] + 0.114f * s[2] : s[0];
+        l[i] = nc == 3 ? 0.299f * s[0] + 0.587f * s[1] + 0.114f * s[2] : s[0];
         l2[i] = l[i] * l[i];
     }
     /* temporaries live on the heap and go right away: they would otherwise sit in the
@@ -2832,9 +2844,9 @@ static void fit_file(const Opts *o, const char *src, const char *dst, Result *re
             double inv = 0, all = 0;
             for (int p = 0; p < g.npl; p++) {
                 const Plane *pl = &g.pl[p];
-                size_t n = (size_t)pl->W * pl->H;
-                all += n;
-                for (size_t i = 0; i < n; i++)
+                size_t npx = (size_t)pl->W * pl->H;
+                all += npx;
+                for (size_t i = 0; i < npx; i++)
                     inv += sample(&g, pl->px + i * g.bpp, g.C - 1) == 0;
             }
             logmsg("--alpha: colour is free under %.1f%% of the pixels (fully transparent)", 100 * inv / all);
