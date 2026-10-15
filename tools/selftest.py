@@ -294,6 +294,8 @@ def main():
         "source already fits: untouched, nothing written",
         r.get("status") == "skipped" and not os.path.exists(f"{TMP}/edge_out.png"),
     )
+    r = run([src, f"{TMP}/edge_out.png", "-s", "1e30"])
+    check("-s 1e30: more than any file, untouched", r.get("status") == "skipped", str(r))
     for t in ("0", "0%", "1"):
         r = run([src, f"{TMP}/edge_out.png", "-s", t])
         check(
@@ -334,9 +336,25 @@ def main():
     bad = bytearray(good)
     bad[40] ^= 0xFF
     open(f"{TMP}/badcrc.png", "wb").write(bytes(bad))
-    for name in ("palette", "trns", "truncated", "notpng", "badcrc"):
+    # sizes that fit only an unsigned 32-bit field: a width of 2^31, a frame at x = 2^32 - 1
+    wide = bytearray(good)
+    wide[16:20] = struct.pack(">I", 1 << 31)
+    wide[29:33] = struct.pack(">I", zlib.crc32(bytes(wide[12:29])))
+    open(f"{TMP}/wide.png", "wb").write(bytes(wide))
+    fctl = chunk(b"fcTL", struct.pack(">IIIIIHHBB", 0, 32, 32, 0xFFFFFFFF, 0, 1, 10, 0, 0))
+    png(f"{TMP}/offcanvas.png", photo(32, 32, 3), extra=chunk(b"acTL", struct.pack(">II", 1, 0)) + fctl)
+    for name in ("palette", "trns", "truncated", "notpng", "badcrc", "wide", "offcanvas"):
         r = run([f"{TMP}/{name}.png", f"{TMP}/r.png", "-s", "50%"], (1,))
         check(f"{name}: refused with a reason", r.get("status") == "error" and r.get("error"), str(r))
+    # an ICC profile whose name offset wraps around 32 bits, read when the profile is dropped
+    prof = bytearray(172)
+    prof[128:132] = struct.pack(">I", 1)
+    prof[132:144] = b"desc" + struct.pack(">II", 144, 28)
+    prof[144:148] = b"mluc"
+    prof[164:172] = struct.pack(">II", 4, 0xFFFFFFFF)
+    png(f"{TMP}/icc.png", photo(32, 32, 3), extra=chunk(b"iCCP", b"x\0\0" + zlib.compress(bytes(prof))))
+    r = run([f"{TMP}/icc.png", f"{TMP}/r.png", "-s", "80%", "-k", "none"])
+    check("broken ICC profile dropped without a crash", isinstance(r, dict) and r.get("status") == "exact", str(r))
     shutil.copy(src, f"{TMP}/same.png")
     r = run([f"{TMP}/same.png", f"{TMP}/same.png", "-s", "80%"], (1,))
     check(

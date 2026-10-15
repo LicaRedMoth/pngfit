@@ -586,13 +586,14 @@ static void png_parse(Png *g, const uint8_t *d, size_t n)
     if (!seen_end)
         fail("missing IEND (truncated file?)");
     const uint8_t *h = g->ch[0].data;
-    g->W = be32(h);
-    g->H = be32(h + 4);
+    const uint32_t w = be32(h), hgt = be32(h + 4); /* checked before they become int */
+    if (!w || !hgt || w > (1 << 24) || hgt > (1 << 24))
+        fail("bad image dimensions");
+    g->W = (int)w;
+    g->H = (int)hgt;
     g->depth = h[8];
     g->ctype = h[9];
     g->interlace = h[12];
-    if (!g->W || !g->H || g->W > (1 << 24) || g->H > (1 << 24))
-        fail("bad image dimensions");
     if (h[10] || h[11] || g->interlace > 1)
         fail("unknown compression, filter or interlace method");
     switch (g->ctype) {
@@ -681,13 +682,13 @@ static void png_parse(Png *g, const uint8_t *d, size_t n)
         cur = &g->pl[g->npl++];
         cur->fctl = 1;
         memcpy(cur->fcb, c->data, 26);
-        cur->W = be32(c->data + 4);
-        cur->H = be32(c->data + 8);
-        cur->x = be32(c->data + 12);
-        cur->y = be32(c->data + 16);
-        if (!cur->W || !cur->H || (uint64_t)cur->x + cur->W > (uint64_t)g->W ||
-            (uint64_t)cur->y + cur->H > (uint64_t)g->H)
+        const uint32_t fw = be32(c->data + 4), fh = be32(c->data + 8), fx = be32(c->data + 12), fy = be32(c->data + 16);
+        if (!fw || !fh || (uint64_t)fx + fw > (uint64_t)g->W || (uint64_t)fy + fh > (uint64_t)g->H)
             fail("broken APNG: frame %d lies outside the canvas", nfctl);
+        cur->W = (int)fw;
+        cur->H = (int)fh;
+        cur->x = (int)fx;
+        cur->y = (int)fy;
         nfctl++;
     }
     if (!g->npl)
@@ -846,7 +847,7 @@ static int reduce_format(Png *g)
     }
     if (!can8 && !opaque && !grey)
         return 0;
-    const int nC = (grey ? 1 : colour ? 3 : 1) + (hasA && !opaque), nbps = can8 ? 1 : g->bps;
+    const int nC = (colour && !grey ? 3 : 1) + (hasA && !opaque), nbps = can8 ? 1 : g->bps;
     const int nbpp = nC * nbps;
     for (int p = 0; p < g->npl; p++) {
         Plane *pl = &g->pl[p];
@@ -856,9 +857,7 @@ static int reduce_format(Png *g)
             const uint8_t *src = pl->px + i * g->bpp;
             uint8_t *dst = out + i * nbpp;
             int chans[4], m = 0;
-            if (grey)
-                chans[m++] = 0;
-            else if (colour) {
+            if (colour && !grey) {
                 chans[m++] = 0;
                 chans[m++] = 1;
                 chans[m++] = 2;
@@ -1034,7 +1033,7 @@ static void icc_name(const Chunk *c, char *out, size_t outn)
                 out[k++] = t[12 + j];
         } else if (!memcmp(t, "mluc", 4) && sz >= 28) {
             uint32_t len = be32(t + 20), o = be32(t + 24);
-            for (uint32_t j = 0; j + 1 < len && o + j + 1 < sz && k < outn - 1; j += 2)
+            for (uint32_t j = 0; j + 1 < len && (uint64_t)o + j + 1 < sz && k < outn - 1; j += 2)
                 out[k++] = t[o + j] ? '?' : t[o + j + 1];
         } else
             return;
@@ -2798,7 +2797,6 @@ static void fit_file(const Opts *o, const char *src, const char *dst, Result *re
 {
     memset(res, 0, sizeof *res);
     double t0 = now();
-    prog.t0 = t0;
     Arena A = {NULL};
     arena = &A;
     if (setjmp(fail_jmp)) {
@@ -2946,9 +2944,11 @@ static void fit_file(const Opts *o, const char *src, const char *dst, Result *re
         o1.strip = synthetic ? 64 : 128;
     if (!o->explore_set && synthetic)
         o1.explore_level = o->level;
+    char rough[40] = "";
+    if (o1.explore_level > 0 && o1.explore_level < o1.level)
+        snprintf(rough, sizeof rough, ", rough search at level %d", o1.explore_level);
     logmsg("content: %s (%.0f%% flat pixels): %d-row strips%s", synthetic ? "synthetic" : "photographic",
-           100 * flat / all, o1.strip,
-           o1.explore_level > 0 && o1.explore_level < o1.level ? ", rough search at level 10" : "");
+           100 * flat / all, o1.strip, rough);
     int strip_h = o1.strip, minimum = 0, onestrip = 0;
     for (;;) {
         int last = strip_h <= 8 || onestrip;
@@ -3010,7 +3010,33 @@ static int64_t parse_size(const char *s, double *pct)
         end++;
     if (*end)
         return -2;
-    return (int64_t)floor(v * mul); /* 0 = as small as possible */
+    double b = floor(v * mul); /* 0 = as small as possible */
+    return b < 0x1p62 ? (int64_t)b : (int64_t)1 << 62; /* more than any file: it fits as it is */
+}
+
+/* the whole of s as a whole number in [lo, hi]; anything else stops pngfit with a usage error */
+static int opt_int(const char *s, long lo, long hi, const char *what)
+{
+    char *end;
+    errno = 0;
+    long v = strtol(s, &end, 10);
+    if (end == s || *end || errno || v < lo || v > hi) {
+        fprintf(stderr, "pngfit: %s\n", what);
+        exit(2);
+    }
+    return (int)v;
+}
+
+static double opt_num(const char *s, double lo, double hi, const char *what)
+{
+    char *end;
+    errno = 0;
+    double v = strtod(s, &end);
+    if (end == s || *end || errno || !(v >= lo && v <= hi)) {
+        fprintf(stderr, "pngfit: %s\n", what);
+        exit(2);
+    }
+    return v;
 }
 
 /* --keep LIST (keep only these) and --strip LIST (drop these): categories, "meta"
@@ -3398,14 +3424,10 @@ static int cli_main(int argc, char **argv)
             o.lossy_alpha = 1;
             break;
         case O_FILTER:
-            o.filter = atoi(optarg);
-            if (o.filter < -1 || o.filter > 4) {
-                fputs("pngfit: --filter must be 0-4 (or -1 to probe)\n", stderr);
-                return 2;
-            }
+            o.filter = opt_int(optarg, -1, 4, "--filter must be 0-4 (or -1 to probe)");
             break;
         case O_RSW:
-            o.row_switch = atof(optarg);
+            o.row_switch = opt_num(optarg, -1, 1, "--row-switch must be a fraction 0-1 (or -1 to probe)");
             break;
         case O_LADDER:
             if (!strcmp(optarg, "odd"))
@@ -3417,8 +3439,8 @@ static int cli_main(int argc, char **argv)
                 char buf[1024];
                 snprintf(buf, sizeof buf, "%s", optarg);
                 for (char *t = strtok(buf, ","); t && o.nladder < 255; t = strtok(NULL, ",")) {
-                    int q = atoi(t);
-                    if (q < 1 || q > 255 || (o.nladder && q <= o.ladder[o.nladder - 1])) {
+                    int q = opt_int(t, 1, 255, "--ladder list must rise from 1 within 1..255");
+                    if (o.nladder && q <= o.ladder[o.nladder - 1]) {
                         fputs("pngfit: --ladder list must rise from 1 within 1..255\n", stderr);
                         return 2;
                     }
@@ -3431,26 +3453,26 @@ static int cli_main(int argc, char **argv)
             }
             break;
         case O_MASK:
-            o.mask = atof(optarg);
+            o.mask = opt_num(optarg, 0, 1e9, "--mask must be 0 or more");
             break;
         case O_NEAREST:
             o.nearest = 1;
             break;
         case O_LEVEL:
-            o.level = atoi(optarg);
+            o.level = opt_int(optarg, 1, 12, "--level must be 1-12");
             break;
         case O_STRIP:
-            o.strip = atoi(optarg);
+            o.strip = opt_int(optarg, 1, 1 << 24, "--strip-rows must be 1 or more");
             o.strip_set = 1;
             break;
         case O_ROUNDS:
-            o.rounds = atoi(optarg);
+            o.rounds = opt_int(optarg, 0, 1000, "--rounds must be 0-1000");
             break;
         case 'j':
-            o.jobs = atoi(optarg);
+            o.jobs = opt_int(optarg, 1, 4096, "--jobs must be 1 or more");
             break;
         case 'P':
-            o.parallel = atoi(optarg);
+            o.parallel = opt_int(optarg, 1, 4096, "--parallel must be 1 or more");
             break;
         case 'q':
             o.quiet = 1;
@@ -3468,7 +3490,7 @@ static int cli_main(int argc, char **argv)
             o.level = 10;
             break;
         case O_EXPLORE:
-            o.explore_level = atoi(optarg);
+            o.explore_level = opt_int(optarg, 1, 12, "--explore-level must be 1-12");
             o.explore_set = 1;
             break;
         case O_NOTHIN:
@@ -3501,10 +3523,6 @@ static int cli_main(int argc, char **argv)
     if (o.size == -2) {
         fputs("pngfit: -s/--size is required\n", stderr);
         usage(stderr);
-        return 2;
-    }
-    if (o.level < 1 || o.level > 12 || o.strip < 1 || o.rounds < 0 || o.jobs < 1 || o.mask < 0) {
-        fputs("pngfit: bad --level/--strip/--rounds/--jobs/--mask value\n", stderr);
         return 2;
     }
     int nin = argc - optind;
@@ -3572,6 +3590,7 @@ static int cli_main(int argc, char **argv)
         } else
             snprintf(dst, sizeof dst, "%s", argv[optind + 1]);
         Result r;
+        prog.t0 = now(); /* here, not in fit_file: batch workers share prog */
         fit_file(&o, src, dst, &r);
         if (o.json)
             print_json(src, dst, &r);
