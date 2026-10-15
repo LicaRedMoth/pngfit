@@ -5,15 +5,20 @@ size, max error and PSNR. Pillow is not used because it truncates 16-bit RGB.
 
   tools/check.py SOURCE.png OUTPUT.png [EXPECTED_SIZE]   # exit 1 on mismatch
 """
-import struct, sys, zlib
+
+import struct
+import sys
+import zlib
+
 import numpy as np
 
 A7 = [(0, 0, 8, 8), (4, 0, 8, 8), (0, 4, 4, 8), (2, 0, 4, 4), (0, 2, 2, 4), (1, 0, 2, 2), (0, 1, 1, 2)]
 
 
-try:                       # numba only makes it fast; the logic is plain Python either way
+try:  # numba only makes it fast; the logic is plain Python either way
     from numba import njit
 except ImportError:
+
     def njit(f):
         return f
 
@@ -61,38 +66,49 @@ def decode_frames(path):
     assert d[:8] == b"\x89PNG\r\n\x1a\n", "not a PNG"
     i, chunks = 8, []
     while i < len(d):
-        n, = struct.unpack(">I", d[i:i + 4]); t = d[i + 4:i + 8]; body = d[i + 8:i + 8 + n]
-        assert zlib.crc32(t + body) == struct.unpack(">I", d[i + 8 + n:i + 12 + n])[0], f"CRC {t}"
-        chunks.append((t, body)); i += 12 + n
+        (n,) = struct.unpack(">I", d[i : i + 4])
+        t = d[i + 4 : i + 8]
+        body = d[i + 8 : i + 8 + n]
+        assert zlib.crc32(t + body) == struct.unpack(">I", d[i + 8 + n : i + 12 + n])[0], f"CRC {t}"
+        chunks.append((t, body))
+        i += 12 + n
     W, H, depth, ct, _, _, il = struct.unpack(">IIBBBBB", chunks[0][1])
-    C = {0: 1, 2: 3, 4: 2, 6: 4}[ct]; bps = depth // 8; bpp = C * bps
+    C = {0: 1, 2: 3, 4: 2, 6: 4}[ct]
+    bps = depth // 8
+    bpp = C * bps
     anim = any(t == b"acTL" for t, _ in chunks)
     plays = struct.unpack(">I", next(b for t, b in chunks if t == b"acTL")[4:8])[0] if anim else None
     frames, cur, seq = [], None, []
     for t, b in chunks:
         if anim and t == b"fcTL":
             seq.append(struct.unpack(">I", b[:4])[0])
-            cur = [b[4:], b""]; frames.append(cur)
+            cur = [b[4:], b""]
+            frames.append(cur)
         elif t == b"IDAT":
             if cur is None or (frames and frames[-1] is not cur):
-                cur = [None, b""]; frames.append(cur)
+                cur = [None, b""]
+                frames.append(cur)
             cur[1] += b
         elif anim and t == b"fdAT":
-            seq.append(struct.unpack(">I", b[:4])[0]); cur[1] += b[4:]
+            seq.append(struct.unpack(">I", b[:4])[0])
+            cur[1] += b[4:]
     assert seq == list(range(len(seq))), f"APNG sequence numbers out of order: {seq[:8]}"
     out = []
     for fc, z in frames:
         w, h = (W, H) if fc is None else struct.unpack(">II", fc[:8])
         raw = zlib.decompress(z)
         if not il:
-            px, _ = unfilter(raw, h, w * bpp, bpp); px = px.reshape(h, w, bpp)
+            px, _ = unfilter(raw, h, w * bpp, bpp)
+            px = px.reshape(h, w, bpp)
         else:
-            px = np.zeros((h, w, bpp), np.uint8); pos = 0
+            px = np.zeros((h, w, bpp), np.uint8)
+            pos = 0
             for x0, y0, dx, dy in A7:
                 if w <= x0 or h <= y0:
                     continue
                 pw, ph = (w - x0 + dx - 1) // dx, (h - y0 + dy - 1) // dy
-                sub, used = unfilter(raw[pos:], ph, pw * bpp, bpp); pos += used
+                sub, used = unfilter(raw[pos:], ph, pw * bpp, bpp)
+                pos += used
                 px[y0::dy, x0::dx] = sub.reshape(ph, pw, bpp)
         if bps == 2:
             px = (px[..., 0::2].astype(np.int64) << 8) | px[..., 1::2]
@@ -131,26 +147,32 @@ def decode(path):
     assert d[:8] == b"\x89PNG\r\n\x1a\n", "not a PNG"
     i, idat, chunks = 8, b"", []
     while i < len(d):
-        n, = struct.unpack(">I", d[i:i + 4]); t = d[i + 4:i + 8]; body = d[i + 8:i + 8 + n]
-        assert zlib.crc32(t + body) == struct.unpack(">I", d[i + 8 + n:i + 12 + n])[0], f"CRC {t}"
+        (n,) = struct.unpack(">I", d[i : i + 4])
+        t = d[i + 4 : i + 8]
+        body = d[i + 8 : i + 8 + n]
+        assert zlib.crc32(t + body) == struct.unpack(">I", d[i + 8 + n : i + 12 + n])[0], f"CRC {t}"
         chunks.append(t)
         if t == b"IHDR":
             W, H, depth, ct, _, _, il = struct.unpack(">IIBBBBB", body)
         if t == b"IDAT":
             idat += body
         i += 12 + n
-    C = {0: 1, 2: 3, 4: 2, 6: 4}[ct]; bps = depth // 8; bpp = C * bps
+    C = {0: 1, 2: 3, 4: 2, 6: 4}[ct]
+    bps = depth // 8
+    bpp = C * bps
     raw = zlib.decompress(idat)
     if not il:
         px, _ = unfilter(raw, H, W * bpp, bpp)
         px = px.reshape(H, W, bpp)
     else:
-        px = np.zeros((H, W, bpp), np.uint8); pos = 0
+        px = np.zeros((H, W, bpp), np.uint8)
+        pos = 0
         for x0, y0, dx, dy in A7:
             if W <= x0 or H <= y0:
                 continue
             pw, ph = (W - x0 + dx - 1) // dx, (H - y0 + dy - 1) // dy
-            sub, used = unfilter(raw[pos:], ph, pw * bpp, bpp); pos += used
+            sub, used = unfilter(raw[pos:], ph, pw * bpp, bpp)
+            pos += used
             px[y0::dy, x0::dx] = sub.reshape(ph, pw, bpp)
     if bps == 2:
         px = (px[..., 0::2].astype(np.int64) << 8) | px[..., 1::2]
@@ -159,20 +181,25 @@ def decode(path):
 
 if __name__ == "__main__" and len(sys.argv) > 1 and sys.argv[1] == "--apng":
     src, out = sys.argv[2], sys.argv[3]
-    fa, pa, da = decode_frames(src); fb, pb, db = decode_frames(out)
+    fa, pa, da = decode_frames(src)
+    fb, pb, db = decode_frames(out)
     ok = len(fa) == len(fb) and pa == pb and da == db
     err, n = 0, 0
     for (ca, xa), (cb, xb) in zip(fa, fb):
-        ok &= ca == cb and xa.shape == xb.shape   # size, offset, delay, dispose, blend all equal
+        ok &= ca == cb and xa.shape == xb.shape  # size, offset, delay, dispose, blend all equal
         if xa.shape == xb.shape:
-            err = max(err, int(abs(xa - xb).max())); n += 1
-    print(f"{out}: {len(open(out, 'rb').read())} B, {len(fb)} frames (source {len(fa)}), plays {pb}, "
-          f"frame controls {'identical' if ok else 'DIFFER'}, max error {err} -> {'OK' if ok else 'MISMATCH'}")
+            err = max(err, int(abs(xa - xb).max()))
+            n += 1
+    print(
+        f"{out}: {len(open(out, 'rb').read())} B, {len(fb)} frames (source {len(fa)}), plays {pb}, "
+        f"frame controls {'identical' if ok else 'DIFFER'}, max error {err} -> {'OK' if ok else 'MISMATCH'}"
+    )
     sys.exit(0 if ok else 1)
 
 if __name__ == "__main__":
     src, out = sys.argv[1], sys.argv[2]
-    a, da, _ = decode(src); b, db, ch = decode(out)
+    a, da, _ = decode(src)
+    b, db, ch = decode(out)
     ok = a.shape == b.shape and da == db
     size = len(open(out, "rb").read())
     if len(sys.argv) > 3:
@@ -180,7 +207,9 @@ if __name__ == "__main__":
     d = (a - b) if a.shape == b.shape else np.array([0])
     peak = 255 if da == 8 else 65535
     mse = float((d.astype(np.float64) ** 2).mean())
-    psnr = 10 * np.log10(peak ** 2 / mse) if mse else float("inf")
-    print(f"{out}: {size} B, {b.shape[1]}x{b.shape[0]} {db}-bit, max error {int(abs(d).max())}, "
-          f"PSNR {psnr:.2f} dB, chunks {b' '.join(ch).decode()} -> {'OK' if ok else 'MISMATCH'}")
+    psnr = 10 * np.log10(peak**2 / mse) if mse else float("inf")
+    print(
+        f"{out}: {size} B, {b.shape[1]}x{b.shape[0]} {db}-bit, max error {int(abs(d).max())}, "
+        f"PSNR {psnr:.2f} dB, chunks {b' '.join(ch).decode()} -> {'OK' if ok else 'MISMATCH'}"
+    )
     sys.exit(0 if ok else 1)

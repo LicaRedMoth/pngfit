@@ -1,0 +1,9 @@
+# Python style of the tools: ruff format, then ruff check (CI checks both)
+line-length = 120
+extend-exclude = ["vendor"]
+
+[lint]
+select = ["E", "F", "W", "I", "B"]
+ignore = [
+    "B905", # zip() without strict=: needs Python 3.10, and the lengths are compared first
+]

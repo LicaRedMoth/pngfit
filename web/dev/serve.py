@@ -1,12 +1,19 @@
 #!/usr/bin/env python3
 """Serves web/ locally with the cross-origin isolation headers, so the threaded build runs
 as it will on Cloudflare Pages:  python3 web/dev/serve.py  ->  http://localhost:8000"""
-import functools, http.server, os, sys
+
+import functools
+import http.server
+import os
+import sys
 
 
 class Isolated(http.server.SimpleHTTPRequestHandler):
-    extensions_map = {**http.server.SimpleHTTPRequestHandler.extensions_map, ".wasm": "application/wasm",
-                      ".js": "text/javascript"}
+    extensions_map = {
+        **http.server.SimpleHTTPRequestHandler.extensions_map,
+        ".wasm": "application/wasm",
+        ".js": "text/javascript",
+    }
 
     def end_headers(self):
         self.send_header("Cross-Origin-Opener-Policy", "same-origin")

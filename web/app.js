@@ -5,23 +5,27 @@ const $ = (id) => document.getElementById(id);
 const dev = new URLSearchParams(location.search).has('mock'); // UI check without the wasm build
 const worker = new Worker(dev ? 'dev/mock-worker.js' : 'worker.js');
 
-let file = null;       // {name, bytes, url}
+let file = null; // {name, bytes, url}
 let resultUrl = null;
 let started = 0;
 let timer = 0;
 
-const fmtBytes = (n) => n >= 1e6 ? (n / 1e6).toFixed(2) + ' MB' : n >= 1e3 ? (n / 1e3).toFixed(1) + ' KB' : n + ' B';
+const fmtBytes = (n) => (n >= 1e6 ? (n / 1e6).toFixed(2) + ' MB' : n >= 1e3 ? (n / 1e3).toFixed(1) + ' KB' : n + ' B');
 const group = (n) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
 
 worker.onmessage = ({ data: m }) => {
   if (m.type === 'ready') {
-    $('cores').textContent = m.threads > 1
-      ? `Running on ${m.threads} threads.`
-      : 'Running single-threaded (this page is not cross-origin isolated, or the browser has no SharedArrayBuffer).';
+    $('cores').textContent =
+      m.threads > 1
+        ? `Running on ${m.threads} threads.`
+        : 'Running single-threaded (this page is not cross-origin isolated, or the browser has no SharedArrayBuffer).';
   } else if (m.type === 'progress') {
     $('phase').textContent = m.label || 'working';
     const bar = $('bar');
-    if (m.total > 0) { bar.max = m.total; bar.value = m.done; } else bar.removeAttribute('value');
+    if (m.total > 0) {
+      bar.max = m.total;
+      bar.value = m.done;
+    } else bar.removeAttribute('value');
   } else if (m.type === 'log') {
     const log = $('log');
     log.textContent += m.line + '\n';
@@ -49,8 +53,13 @@ function pick(f) {
     resultUrl = null;
     file = { name: f.name, bytes: buf, url: URL.createObjectURL(new Blob([buf], { type: 'image/png' })) };
     const img = new Image();
-    img.onload = () => { $('fileinfo').textContent = `${f.name} · ${img.naturalWidth}×${img.naturalHeight} · ${fmtBytes(buf.byteLength)}`; };
-    img.onerror = () => { $('fileinfo').textContent = `${f.name} · ${fmtBytes(buf.byteLength)} · the browser cannot show it, pngfit may still read it`; };
+    img.onload = () => {
+      $('fileinfo').textContent = `${f.name} · ${img.naturalWidth}×${img.naturalHeight} · ${fmtBytes(buf.byteLength)}`;
+    };
+    img.onerror = () => {
+      $('fileinfo').textContent =
+        `${f.name} · ${fmtBytes(buf.byteLength)} · the browser cannot show it, pngfit may still read it`;
+    };
     img.src = file.url;
     $('go').disabled = false;
     $('result').hidden = true;
@@ -59,8 +68,18 @@ function pick(f) {
 
 $('file').addEventListener('change', (e) => pick(e.target.files[0]));
 const drop = $('drop');
-['dragenter', 'dragover'].forEach((t) => drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.add('over'); }));
-['dragleave', 'drop'].forEach((t) => drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.remove('over'); }));
+['dragenter', 'dragover'].forEach((t) =>
+  drop.addEventListener(t, (e) => {
+    e.preventDefault();
+    drop.classList.add('over');
+  }),
+);
+['dragleave', 'drop'].forEach((t) =>
+  drop.addEventListener(t, (e) => {
+    e.preventDefault();
+    drop.classList.remove('over');
+  }),
+);
 drop.addEventListener('drop', (e) => pick(e.dataTransfer.files[0]));
 
 function args() {
@@ -74,12 +93,18 @@ function args() {
   return a;
 }
 
-function stopTimer() { clearInterval(timer); timer = 0; }
+function stopTimer() {
+  clearInterval(timer);
+  timer = 0;
+}
 
 $('go').addEventListener('click', () => {
   if (!file) return;
   const size = parseFloat($('size').value);
-  if (!(size >= 0)) { $('size').focus(); return; }
+  if (!(size >= 0)) {
+    $('size').focus();
+    return;
+  }
   $('go').disabled = true;
   $('result').hidden = true;
   $('work').hidden = false;
@@ -145,11 +170,20 @@ function finish(m) {
 // The difference view: per pixel the largest change in any channel, the image's largest the brightest.
 // Decoded without colour management, so a dropped profile is no change; pixels transparent in both stay black.
 let diffFor = null; // the result the canvas shows
-const HEAT = (() => { // black, violet, red, orange, pale yellow
-  const stops = [[0, 0, 4], [87, 16, 110], [188, 55, 84], [249, 142, 9], [252, 255, 164]];
+const HEAT = (() => {
+  // black, violet, red, orange, pale yellow
+  const stops = [
+    [0, 0, 4],
+    [87, 16, 110],
+    [188, 55, 84],
+    [249, 142, 9],
+    [252, 255, 164],
+  ];
   const lut = new Uint8Array(256 * 3);
   for (let v = 0; v < 256; v++) {
-    const x = (v / 255) * (stops.length - 1), i = Math.min(stops.length - 2, Math.floor(x)), f = x - i;
+    const x = (v / 255) * (stops.length - 1),
+      i = Math.min(stops.length - 2, Math.floor(x)),
+      f = x - i;
     for (let c = 0; c < 3; c++) lut[v * 3 + c] = Math.round(stops[i][c] + (stops[i + 1][c] - stops[i][c]) * f);
   }
   return lut;
@@ -174,7 +208,7 @@ async function drawDiff() {
   let a, b;
   try {
     [a, b] = await Promise.all([pixelsOf(file.url), pixelsOf(want)]);
-  } catch (_) {
+  } catch {
     $('legend').textContent = 'This browser cannot decode the images to compare them.';
     return;
   }
@@ -183,12 +217,20 @@ async function drawDiff() {
     $('legend').textContent = 'The two images differ in size, so there is nothing to compare.';
     return;
   }
-  const n = a.width * a.height, d = new Uint8Array(n), A = a.data, B = b.data;
-  let max = 0, changed = 0;
+  const n = a.width * a.height,
+    d = new Uint8Array(n),
+    A = a.data,
+    B = b.data;
+  let max = 0,
+    changed = 0;
   for (let i = 0, p = 0; i < n; i++, p += 4) {
     if (A[p + 3] === 0 && B[p + 3] === 0) continue;
-    const m = Math.max(Math.abs(A[p] - B[p]), Math.abs(A[p + 1] - B[p + 1]),
-                       Math.abs(A[p + 2] - B[p + 2]), Math.abs(A[p + 3] - B[p + 3]));
+    const m = Math.max(
+      Math.abs(A[p] - B[p]),
+      Math.abs(A[p + 1] - B[p + 1]),
+      Math.abs(A[p + 2] - B[p + 2]),
+      Math.abs(A[p + 3] - B[p + 3]),
+    );
     d[i] = m;
     if (m) changed++;
     if (m > max) max = m;
@@ -197,7 +239,8 @@ async function drawDiff() {
   canvas.width = a.width;
   canvas.height = a.height;
   const g = canvas.getContext('2d');
-  const out = g.createImageData(a.width, a.height), O = out.data;
+  const out = g.createImageData(a.width, a.height),
+    O = out.data;
   for (let i = 0, p = 0; i < n; i++, p += 4) {
     const v = max ? Math.round((d[i] * 255) / max) * 3 : 0;
     O[p] = HEAT[v];
@@ -207,10 +250,11 @@ async function drawDiff() {
   }
   g.putImageData(out, 0, 0);
   diffFor = want;
-  $('legend').textContent = max === 0
-    ? 'No pixel changed.'
-    : `Black: unchanged. Brightest: the largest change, ±${max} of 255 as the browser shows it. ` +
-      `${((changed / n) * 100).toFixed(1)} % of the pixels changed.`;
+  $('legend').textContent =
+    max === 0
+      ? 'No pixel changed.'
+      : `Black: unchanged. Brightest: the largest change, ±${max} of 255 as the browser shows it. ` +
+        `${((changed / n) * 100).toFixed(1)} % of the pixels changed.`;
 }
 
 async function showDiff() {
@@ -226,12 +270,18 @@ $('diffmode').addEventListener('change', showDiff);
 // Fitted: the whole image on screen, no taller than 75 % of the window. At 1:1: its own size, a small
 // image centred, a large one scrolling. Pixels show as squares only when enlarged.
 function layout() {
-  const img = $('before'), stage = $('stage'), c = $('compare'), viewer = $('viewer');
-  const zoomed = $('zoom').checked, w = img.naturalWidth, h = img.naturalHeight;
+  const img = $('before'),
+    stage = $('stage'),
+    c = $('compare'),
+    viewer = $('viewer');
+  const zoomed = $('zoom').checked,
+    w = img.naturalWidth,
+    h = img.naturalHeight;
   c.classList.toggle('zoomed', zoomed);
   viewer.style.maxWidth = '';
   if (w && h) {
-    if (zoomed) { // the image, its border, and the vertical scrollbar if it has one
+    if (zoomed) {
+      // the image, its border, and the vertical scrollbar if it has one
       const bar = c.offsetWidth - c.clientWidth - 2;
       viewer.style.maxWidth = `${w + 2 + bar}px`;
     } else {
@@ -248,8 +298,9 @@ function setSplit(v) {
 
 // at 1:1, bring the boundary into view (and, the first time, the middle of the image)
 function reveal(middle) {
-  const c = $('compare'), stage = $('stage');
-  c.scrollLeft = stage.offsetWidth * $('split').value / 100 - c.clientWidth / 2;
+  const c = $('compare'),
+    stage = $('stage');
+  c.scrollLeft = (stage.offsetWidth * $('split').value) / 100 - c.clientWidth / 2;
   if (middle) c.scrollTop = (stage.offsetHeight - c.clientHeight) / 2;
 }
 
@@ -258,7 +309,8 @@ $('before').addEventListener('load', () => {
   $('noview').hidden = true;
   layout();
 });
-$('before').addEventListener('error', () => { // a PNG pngfit reads but this browser cannot show
+$('before').addEventListener('error', () => {
+  // a PNG pngfit reads but this browser cannot show
   $('viewer').hidden = true;
   $('noview').hidden = false;
 });

@@ -1,8 +1,13 @@
 #!/usr/bin/env python3
 """Re-run current pngfit at the exact byte sizes an older results CSV produced (fair A/B)."""
-import csv, os, sys
+
+import csv
+import os
+import sys
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import pngfit
+
 D = os.environ.get("PNGFIT_DATASET") or sys.exit("set PNGFIT_DATASET to the dataset root")
 old_csv, out_csv, tmpdir = sys.argv[1:4]
 done = set()
@@ -19,5 +24,15 @@ with open(out_csv, "a", newline="") as fh:
         a = pngfit.build_parser().parse_args([os.path.join(D, r["file"]), dst, "-s", r["size"], "-q"])
         res = pngfit.fit(a, lambda *x: None)
         os.remove(dst)
-        row = [r["file"], r["size"], r["psnr"], f"{res['psnr']:.2f}", res["size"] == res["target"], r["maxerr"], res["maxerr"]]
-        w.writerow(row); fh.flush(); print(*row, flush=True)
+        row = [
+            r["file"],
+            r["size"],
+            r["psnr"],
+            f"{res['psnr']:.2f}",
+            res["size"] == res["target"],
+            r["maxerr"],
+            res["maxerr"],
+        ]
+        w.writerow(row)
+        fh.flush()
+        print(*row, flush=True)

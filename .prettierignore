@@ -1,0 +1,6 @@
+# Emscripten output (web/build.sh)
+web/pngfit.js
+web/pngfit-st.js
+vendor/
+# prose: kept as written
+*.md

@@ -9,7 +9,11 @@ require(require('path').resolve(modPath))({ print: (l) => console.log(l), printE
   const p = mod._malloc(4 * ptrs.length);
   ptrs.forEach((x, i) => mod.setValue(p + 4 * i, x, 'i32'));
   mod.onDone = (rc) => {
-    try { fs.writeFileSync(outFile, mod.FS.readFile('/out.png')); } catch (_) { /* nothing written */ }
+    try {
+      fs.writeFileSync(outFile, mod.FS.readFile('/out.png'));
+    } catch {
+      /* nothing written */
+    }
     process.exitCode = rc;
   };
   mod._pngfit_start(argv.length, p);

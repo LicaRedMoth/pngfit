@@ -30,7 +30,12 @@ function main() {
     mainScriptUrlOrBlob: new URL(script, self.location.href).href,
     print(line) {
       if (line.startsWith('{')) {
-        try { json = JSON.parse(line); return; } catch (_) { /* not ours: show it */ }
+        try {
+          json = JSON.parse(line);
+          return;
+        } catch {
+          /* not ours: show it */
+        }
       }
       postMessage({ type: 'log', line });
     },
@@ -42,13 +47,16 @@ function main() {
         postMessage({ type: 'log', line });
       }
     },
-  }).then((mod) => {
-    postMessage({ type: 'ready', threads: threaded ? navigator.hardwareConcurrency : 1 });
-    return mod;
-  }, (err) => {
-    postMessage({ type: 'error', message: 'could not load the WebAssembly module: ' + err });
-    throw err;
-  });
+  }).then(
+    (mod) => {
+      postMessage({ type: 'ready', threads: threaded ? navigator.hardwareConcurrency : 1 });
+      return mod;
+    },
+    (err) => {
+      postMessage({ type: 'error', message: 'could not load the WebAssembly module: ' + err });
+      throw err;
+    },
+  );
 
   onmessage = async (event) => {
     const msg = event.data;
@@ -60,21 +68,45 @@ function main() {
     }
     busy = true;
     json = null;
-    const inPath = '/in.png', outPath = '/out.png';
+    const inPath = '/in.png',
+      outPath = '/out.png';
     mod.FS.writeFile(inPath, new Uint8Array(msg.bytes));
-    try { mod.FS.unlink(outPath); } catch (_) { /* no previous output */ }
+    try {
+      mod.FS.unlink(outPath);
+    } catch {
+      /* no previous output */
+    }
 
-    const args = ['pngfit', ...msg.args, ...(threaded ? [] : ['-j', '1']),
-                  '--json', '--progress-lines', inPath, outPath];
+    const args = [
+      'pngfit',
+      ...msg.args,
+      ...(threaded ? [] : ['-j', '1']),
+      '--json',
+      '--progress-lines',
+      inPath,
+      outPath,
+    ];
     const ptrs = args.map((a) => mod.stringToNewUTF8(a));
     const argv = mod._malloc(4 * ptrs.length);
     ptrs.forEach((p, i) => mod.setValue(argv + 4 * i, p, 'i32'));
 
     mod.onDone = (rc) => {
       let out = null;
-      try { out = mod.FS.readFile(outPath); } catch (_) { /* nothing written: skipped or failed */ }
-      try { mod.FS.unlink(inPath); } catch (_) { /* already gone */ }
-      try { mod.FS.unlink(outPath); } catch (_) { /* never written */ }
+      try {
+        out = mod.FS.readFile(outPath);
+      } catch {
+        /* nothing written: skipped or failed */
+      }
+      try {
+        mod.FS.unlink(inPath);
+      } catch {
+        /* already gone */
+      }
+      try {
+        mod.FS.unlink(outPath);
+      } catch {
+        /* never written */
+      }
       busy = false;
       postMessage({ type: 'result', rc, json, bytes: out ? out.buffer : null }, out ? [out.buffer] : []);
     };
