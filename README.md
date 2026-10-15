@@ -303,11 +303,12 @@ deploying it on a static host.
 | `pngfit.c` | the tool: PNG reader (8/16-bit, Adam7), quantizer, strip stitching, RD search, writer |
 | `Makefile` | `make`, `make native`, `make check`, `make install`, `make windows`, `make windows-cross` |
 | `tools/selftest.py` | `make check`: builds its own test images (all formats, APNG, transparency, broken files), checks every output |
-| `tools/check.py` | independent reference decoder: re-checks size and error of any output; `--apng` compares every frame and frame control |
+| `tools/check.py` | independent reference decoder: re-checks the size, the error and every frame control of any output, PNG or APNG |
+| `tools/testimages.py` | test PNG and APNG files written from numpy arrays, for the self-test and the fuzzer |
 | `tools/bench.py` | benchmark on a dataset sample: `PNGFIT_DATASET=/path tools/bench.py out.csv` |
 | `tools/rd_data.py`, `tools/charts.py` | the data and charts in this README |
 | `tools/prototype/` | the original Python prototype, and `make_video.py`, which renders the demo video |
-| `tools/fuzz.c`, `tools/fuzz.sh` | fuzzer for the PNG reader under AddressSanitizer: `tools/fuzz.sh [seconds]` (clang) |
+| `tools/fuzz.c`, `tools/fuzz.sh`, `tools/fuzz_seeds.py` | fuzzer for the PNG reader under AddressSanitizer: `tools/fuzz.sh [seconds]` (clang) |
 | `web/` | the browser version: page, worker, Emscripten build script |
 | `packaging/aur/` | PKGBUILDs for the AUR: `pngfit` (releases) and `pngfit-git` |
 | `.github/workflows/` | CI: `check.yml` on every push (builds, self-tests, formatting, sanitizers, fuzzing), `release.yml` builds the release files from a version tag |

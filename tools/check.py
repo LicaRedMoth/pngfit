@@ -1,19 +1,25 @@
 #!/usr/bin/env python3
-"""Independent check of a pngfit output: decode both PNGs with a small reference
-decoder written here (numpy + zlib, 8/16-bit, any colour type, Adam7), then report
-size, max error and PSNR. Pillow is not used because it truncates 16-bit RGB.
+"""Independent check of a pngfit output, with a small PNG and APNG decoder of its own (numpy and zlib).
+Pillow is not used because it truncates 16-bit RGB.
 
-  tools/check.py SOURCE.png OUTPUT.png [EXPECTED_SIZE]   # exit 1 on mismatch
+  tools/check.py SOURCE.png OUTPUT.png [EXPECTED_SIZE]    exit code 1 on a mismatch
 """
 
+import collections
+import os
 import struct
 import sys
 import zlib
 
 import numpy as np
 
-A7 = [(0, 0, 8, 8), (4, 0, 8, 8), (0, 4, 4, 8), (2, 0, 4, 4), (0, 2, 2, 4), (1, 0, 2, 2), (0, 1, 1, 2)]
+SIGNATURE = b"\x89PNG\r\n\x1a\n"
+SAMPLES = {0: 1, 2: 3, 4: 2, 6: 4}  # PNG colour type -> samples per pixel
+ADAM7 = [(0, 0, 8, 8), (4, 0, 8, 8), (0, 4, 4, 8), (2, 0, 4, 4), (0, 2, 2, 4), (1, 0, 2, 2), (0, 1, 1, 2)]
 
+# frames: (frame control without its sequence number, samples); the control is None for a still image
+Decoded = collections.namedtuple("Decoded", "frames plays depth chunk_types")
+Comparison = collections.namedtuple("Comparison", "max_error psnr")
 
 try:  # numba only makes it fast; the logic is plain Python either way
     from numba import njit
@@ -24,192 +30,182 @@ except ImportError:
 
 
 @njit
-def _unfilter(buf, h, rowbytes, bpp, out):
+def _unfilter(data, height, rowbytes, bpp, rows):
     pos = 0
-    for y in range(h):
-        ft = buf[pos]
+    for y in range(height):
+        filter_type = data[pos]
         pos += 1
+
         for i in range(rowbytes):
-            a = out[y, i - bpp] if i >= bpp else 0
-            b = out[y - 1, i] if y > 0 else 0
-            c = out[y - 1, i - bpp] if (y > 0 and i >= bpp) else 0
-            if ft == 0:
-                p = 0
-            elif ft == 1:
-                p = a
-            elif ft == 2:
-                p = b
-            elif ft == 3:
-                p = (a + b) >> 1
-            elif ft == 4:
-                pp = a + b - c
-                pa, pb, pc = abs(pp - a), abs(pp - b), abs(pp - c)
-                p = a if (pa <= pb and pa <= pc) else (b if pb <= pc else c)
+            left = rows[y, i - bpp] if i >= bpp else 0
+            up = rows[y - 1, i] if y > 0 else 0
+            up_left = rows[y - 1, i - bpp] if y > 0 and i >= bpp else 0
+
+            if filter_type == 0:
+                predicted = 0
+            elif filter_type == 1:
+                predicted = left
+            elif filter_type == 2:
+                predicted = up
+            elif filter_type == 3:
+                predicted = (left + up) >> 1
+            elif filter_type == 4:
+                guess = left + up - up_left
+                to_left, to_up, to_up_left = abs(guess - left), abs(guess - up), abs(guess - up_left)
+                if to_left <= to_up and to_left <= to_up_left:
+                    predicted = left
+                elif to_up <= to_up_left:
+                    predicted = up
+                else:
+                    predicted = up_left
             else:
                 return -1
-            out[y, i] = (buf[pos + i] + p) & 255
+
+            rows[y, i] = (data[pos + i] + predicted) & 255
         pos += rowbytes
     return pos
 
 
-def unfilter(raw, h, rowbytes, bpp):
-    out = np.zeros((h, rowbytes), np.int32)
-    pos = _unfilter(np.frombuffer(raw, np.uint8).astype(np.int32), h, rowbytes, bpp, out)
-    assert pos >= 0, "bad filter type"
-    return out.astype(np.uint8), pos
+def unfilter(data, height, rowbytes, bpp):
+    """Undo the row filters; returns the rows and how many bytes of data they took."""
+    rows = np.zeros((height, rowbytes), np.int32)
+    used = _unfilter(np.frombuffer(data, np.uint8).astype(np.int32), height, rowbytes, bpp, rows)
+    assert used >= 0, "bad filter type"
+    return rows.astype(np.uint8), used
 
 
-def decode_frames(path):
-    """APNG-aware: [(fcTL fields without the sequence number, or None for a default
-    image outside the animation, pixels)], plus num_plays (None for a still)."""
-    d = open(path, "rb").read()
-    assert d[:8] == b"\x89PNG\r\n\x1a\n", "not a PNG"
-    i, chunks = 8, []
-    while i < len(d):
-        (n,) = struct.unpack(">I", d[i : i + 4])
-        t = d[i + 4 : i + 8]
-        body = d[i + 8 : i + 8 + n]
-        assert zlib.crc32(t + body) == struct.unpack(">I", d[i + 8 + n : i + 12 + n])[0], f"CRC {t}"
-        chunks.append((t, body))
-        i += 12 + n
-    W, H, depth, ct, _, _, il = struct.unpack(">IIBBBBB", chunks[0][1])
-    C = {0: 1, 2: 3, 4: 2, 6: 4}[ct]
-    bps = depth // 8
-    bpp = C * bps
-    anim = any(t == b"acTL" for t, _ in chunks)
-    plays = struct.unpack(">I", next(b for t, b in chunks if t == b"acTL")[4:8])[0] if anim else None
-    frames, cur, seq = [], None, []
-    for t, b in chunks:
-        if anim and t == b"fcTL":
-            seq.append(struct.unpack(">I", b[:4])[0])
-            cur = [b[4:], b""]
-            frames.append(cur)
-        elif t == b"IDAT":
-            if cur is None or (frames and frames[-1] is not cur):
-                cur = [None, b""]
-                frames.append(cur)
-            cur[1] += b
-        elif anim and t == b"fdAT":
-            seq.append(struct.unpack(">I", b[:4])[0])
-            cur[1] += b[4:]
-    assert seq == list(range(len(seq))), f"APNG sequence numbers out of order: {seq[:8]}"
-    out = []
-    for fc, z in frames:
-        w, h = (W, H) if fc is None else struct.unpack(">II", fc[:8])
-        raw = zlib.decompress(z)
-        if not il:
-            px, _ = unfilter(raw, h, w * bpp, bpp)
-            px = px.reshape(h, w, bpp)
-        else:
-            px = np.zeros((h, w, bpp), np.uint8)
-            pos = 0
-            for x0, y0, dx, dy in A7:
-                if w <= x0 or h <= y0:
-                    continue
-                pw, ph = (w - x0 + dx - 1) // dx, (h - y0 + dy - 1) // dy
-                sub, used = unfilter(raw[pos:], ph, pw * bpp, bpp)
-                pos += used
-                px[y0::dy, x0::dx] = sub.reshape(ph, pw, bpp)
-        if bps == 2:
-            px = (px[..., 0::2].astype(np.int64) << 8) | px[..., 1::2]
-        out.append((fc, px.astype(np.int64)))
-    return out, plays, depth
+def read_chunks(path):
+    """The chunks of a PNG as (type, data) pairs, with the signature and every CRC checked."""
+    with open(path, "rb") as f:
+        data = f.read()
+    assert data[:8] == SIGNATURE, f"{path}: not a PNG"
+
+    chunks = []
+    pos = 8
+    while pos < len(data):
+        length = struct.unpack(">I", data[pos : pos + 4])[0]
+        kind = data[pos + 4 : pos + 8]
+        body = data[pos + 8 : pos + 8 + length]
+        crc = struct.unpack(">I", data[pos + 8 + length : pos + 12 + length])[0]
+        assert zlib.crc32(kind + body) == crc, f"{path}: bad CRC in {kind.decode()}"
+        chunks.append((kind, body))
+        pos += 12 + length
+    return chunks
 
 
-def worst_error(src, out):
-    """Worst per-sample error between a source and a pngfit output, PNG or APNG, with the
-    output expanded back to the source's format (pngfit may reduce it losslessly: opaque
-    alpha dropped, grey from colour, 8-bit from 16). In the output's units, as pngfit
-    reports it. None if frames or frame controls differ."""
-    fa, pa, da = decode_frames(src)
-    fb, pb, db = decode_frames(out)
-    if len(fa) != len(fb) or pa != pb:
-        return None
-    worst = 0
-    for (ca, a), (cb, b) in zip(fa, fb):
-        if ca != cb or a.shape[:2] != b.shape[:2]:
-            return None
-        Ca, Cb = a.shape[2], b.shape[2]
-        if Cb < Ca:
-            if Cb in (1, 2) and Ca in (3, 4):
-                b = np.concatenate([b[..., :1]] * 3 + ([b[..., 1:2]] if Cb == 2 else []), 2)
-            if b.shape[2] < Ca:
-                b = np.concatenate([b, np.full(b.shape[:2] + (1,), 255 if db == 8 else 65535)], 2)
-        if db == 8 and da == 16:
-            b = b * 257
-        e = int(abs(a - b).max())
-        worst = max(worst, e // 257 if (db == 8 and da == 16) else e)
-    return worst
+def decode_pixels(data, width, height, bpp, interlaced):
+    """The bytes of one image, shape (height, width, bpp)."""
+    if not interlaced:
+        rows, _ = unfilter(data, height, width * bpp, bpp)
+        return rows.reshape(height, width, bpp)
+
+    pixels = np.zeros((height, width, bpp), np.uint8)
+    pos = 0
+    for x0, y0, dx, dy in ADAM7:
+        if width <= x0 or height <= y0:
+            continue
+        pass_width = (width - x0 + dx - 1) // dx
+        pass_height = (height - y0 + dy - 1) // dy
+        rows, used = unfilter(data[pos:], pass_height, pass_width * bpp, bpp)
+        pixels[y0::dy, x0::dx] = rows.reshape(pass_height, pass_width, bpp)
+        pos += used
+    return pixels
 
 
 def decode(path):
-    d = open(path, "rb").read()
-    assert d[:8] == b"\x89PNG\r\n\x1a\n", "not a PNG"
-    i, idat, chunks = 8, b"", []
-    while i < len(d):
-        (n,) = struct.unpack(">I", d[i : i + 4])
-        t = d[i + 4 : i + 8]
-        body = d[i + 8 : i + 8 + n]
-        assert zlib.crc32(t + body) == struct.unpack(">I", d[i + 8 + n : i + 12 + n])[0], f"CRC {t}"
-        chunks.append(t)
-        if t == b"IHDR":
-            W, H, depth, ct, _, _, il = struct.unpack(">IIBBBBB", body)
-        if t == b"IDAT":
-            idat += body
-        i += 12 + n
-    C = {0: 1, 2: 3, 4: 2, 6: 4}[ct]
-    bps = depth // 8
-    bpp = C * bps
-    raw = zlib.decompress(idat)
-    if not il:
-        px, _ = unfilter(raw, H, W * bpp, bpp)
-        px = px.reshape(H, W, bpp)
-    else:
-        px = np.zeros((H, W, bpp), np.uint8)
-        pos = 0
-        for x0, y0, dx, dy in A7:
-            if W <= x0 or H <= y0:
-                continue
-            pw, ph = (W - x0 + dx - 1) // dx, (H - y0 + dy - 1) // dy
-            sub, used = unfilter(raw[pos:], ph, pw * bpp, bpp)
-            pos += used
-            px[y0::dy, x0::dx] = sub.reshape(ph, pw, bpp)
-    if bps == 2:
-        px = (px[..., 0::2].astype(np.int64) << 8) | px[..., 1::2]
-    return px.astype(np.int64), depth, chunks
+    chunks = read_chunks(path)
+    width, height, depth, colour_type, _, _, interlaced = struct.unpack(">IIBBBBB", chunks[0][1])
+    bpp = SAMPLES[colour_type] * depth // 8
+    actl = [body for kind, body in chunks if kind == b"acTL"]
+    plays = struct.unpack(">I", actl[0][4:8])[0] if actl else None
+
+    # each frame's compressed data; image data before any fcTL is a still or a default image
+    frames = []
+    sequence = []
+    for kind, body in chunks:
+        if actl and kind == b"fcTL":
+            sequence.append(struct.unpack(">I", body[:4])[0])
+            frames.append([body[4:], b""])
+        elif kind == b"IDAT":
+            if not frames:
+                frames.append([None, b""])
+            frames[-1][1] += body
+        elif actl and kind == b"fdAT":
+            sequence.append(struct.unpack(">I", body[:4])[0])
+            frames[-1][1] += body[4:]
+    assert sequence == list(range(len(sequence))), f"{path}: APNG sequence numbers out of order"
+
+    decoded = []
+    for control, data in frames:
+        frame_width, frame_height = (width, height) if control is None else struct.unpack(">II", control[:8])
+        pixels = decode_pixels(zlib.decompress(data), frame_width, frame_height, bpp, interlaced)
+        samples = pixels.astype(np.int64)
+        if depth == 16:
+            samples = (samples[..., 0::2] << 8) | samples[..., 1::2]
+        decoded.append((control, samples))
+
+    return Decoded(decoded, plays, depth, [kind for kind, _ in chunks])
 
 
-if __name__ == "__main__" and len(sys.argv) > 1 and sys.argv[1] == "--apng":
-    src, out = sys.argv[2], sys.argv[3]
-    fa, pa, da = decode_frames(src)
-    fb, pb, db = decode_frames(out)
-    ok = len(fa) == len(fb) and pa == pb and da == db
-    err, n = 0, 0
-    for (ca, xa), (cb, xb) in zip(fa, fb):
-        ok &= ca == cb and xa.shape == xb.shape  # size, offset, delay, dispose, blend all equal
-        if xa.shape == xb.shape:
-            err = max(err, int(abs(xa - xb).max()))
-            n += 1
-    print(
-        f"{out}: {len(open(out, 'rb').read())} B, {len(fb)} frames (source {len(fa)}), plays {pb}, "
-        f"frame controls {'identical' if ok else 'DIFFER'}, max error {err} -> {'OK' if ok else 'MISMATCH'}"
-    )
+def as_source_format(samples, source_samples, depth, source_depth):
+    """Undo pngfit's lossless reductions (grey from colour, opaque alpha dropped, 16 to 8 bits)."""
+    if samples.shape[2] <= 2 and source_samples >= 3:
+        grey = [samples[..., :1]] * 3
+        alpha = [samples[..., 1:2]] if samples.shape[2] == 2 else []
+        samples = np.concatenate(grey + alpha, 2)
+
+    if samples.shape[2] < source_samples:
+        opaque = np.full(samples.shape[:2] + (1,), 255 if depth == 8 else 65535)
+        samples = np.concatenate([samples, opaque], 2)
+
+    if depth == 8 and source_depth == 16:
+        samples = samples * 257
+    return samples
+
+
+def compare(source, output):
+    """Worst sample error (in the output's units, as pngfit reports it) and PSNR of output against
+    source; both None when the frames or their controls differ."""
+    a, b = decode(source), decode(output)
+    if len(a.frames) != len(b.frames) or a.plays != b.plays:
+        return Comparison(None, None)
+
+    reduced_depth = a.depth == 16 and b.depth == 8
+    worst = 0
+    squares = 0.0
+    count = 0
+    for (control_a, samples_a), (control_b, samples_b) in zip(a.frames, b.frames):
+        if control_a != control_b or samples_a.shape[:2] != samples_b.shape[:2]:
+            return Comparison(None, None)
+
+        samples_b = as_source_format(samples_b, samples_a.shape[2], b.depth, a.depth)
+        diff = samples_a - samples_b
+        error = int(np.abs(diff).max())
+        worst = max(worst, error // 257 if reduced_depth else error)
+        squares += float((diff.astype(np.float64) ** 2).sum())
+        count += diff.size
+
+    peak = 255 if a.depth == 8 else 65535
+    psnr = 10 * np.log10(peak**2 * count / squares) if squares else float("inf")
+    return Comparison(worst, psnr)
+
+
+def main():
+    if len(sys.argv) not in (3, 4):
+        sys.exit(__doc__)
+    source, output = sys.argv[1], sys.argv[2]
+
+    size = os.path.getsize(output)
+    result = compare(source, output)
+    ok = result.max_error is not None
+    if len(sys.argv) == 4:
+        ok = ok and size == int(sys.argv[3])
+
+    frames = len(decode(output).frames)
+    error = "frames differ" if result.max_error is None else f"max error {result.max_error}, PSNR {result.psnr:.2f} dB"
+    print(f"{output}: {size} B, {frames} frame(s), {error} -> {'OK' if ok else 'MISMATCH'}")
     sys.exit(0 if ok else 1)
+
 
 if __name__ == "__main__":
-    src, out = sys.argv[1], sys.argv[2]
-    a, da, _ = decode(src)
-    b, db, ch = decode(out)
-    ok = a.shape == b.shape and da == db
-    size = len(open(out, "rb").read())
-    if len(sys.argv) > 3:
-        ok &= size == int(sys.argv[3])
-    d = (a - b) if a.shape == b.shape else np.array([0])
-    peak = 255 if da == 8 else 65535
-    mse = float((d.astype(np.float64) ** 2).mean())
-    psnr = 10 * np.log10(peak**2 / mse) if mse else float("inf")
-    print(
-        f"{out}: {size} B, {b.shape[1]}x{b.shape[0]} {db}-bit, max error {int(abs(d).max())}, "
-        f"PSNR {psnr:.2f} dB, chunks {b' '.join(ch).decode()} -> {'OK' if ok else 'MISMATCH'}"
-    )
-    sys.exit(0 if ok else 1)
+    main()
