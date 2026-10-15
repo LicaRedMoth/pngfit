@@ -3,11 +3,9 @@
 #   pngfit.js + pngfit.wasm        threaded (needs a cross-origin isolated page: COOP/COEP)
 #   pngfit-st.js + pngfit-st.wasm  single-threaded fallback for pages served without them
 #
-# Needs Emscripten (emcc) and libdeflate's sources, linked as a git submodule rather than
-# copied, so an upstream update is one command away:
+# Needs Emscripten (emcc) and the libdeflate submodule; zlib is Emscripten's own port (-sUSE_ZLIB=1).
 #   git submodule update --init                       # after a clone
 #   git submodule update --remote vendor/libdeflate   # to update
-# zlib comes from Emscripten's own port (-sUSE_ZLIB=1).
 set -e
 cd "$(dirname "$0")/.."
 LD=vendor/libdeflate

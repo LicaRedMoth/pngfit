@@ -1,4 +1,4 @@
-/* fitcore — compress one strip of PNG filtered rows into a raw-DEFLATE fragment
+/* fitcore: compress one strip of PNG filtered rows into a raw-DEFLATE fragment
  * that can be concatenated with other fragments into one valid stream.
  *
  * libdeflate always ends its output with a BFINAL block. We locate that block's

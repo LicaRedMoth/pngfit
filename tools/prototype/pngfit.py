@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""pngfit — make a truecolor PNG exactly N bytes with the least visible loss.
+"""pngfit: make a truecolor PNG exactly N bytes with the least visible loss.
 
 PNG predicts every byte from its neighbours (filter) and DEFLATEs the residual.
 We round residuals to multiples of a step q, which shrinks the symbol alphabet
@@ -459,9 +459,9 @@ def _fit(a, log, prog, last_try):
     log(f"metadata kept: {desc(meta)}; dropped: {desc(dropped)}")
     for t, d in dropped:
         if t == b"iCCP" and not icc_name(d).lower().startswith("srgb"):   # "Display P3 … sRGB Transfer" is not sRGB
-            log(f"WARNING: dropping colour profile '{icc_name(d)}' — colours will look different")
+            log(f"WARNING: dropping colour profile '{icc_name(d)}': colours will look different")
         elif t in (b"gAMA", b"cHRM", b"cICP"):
-            log(f"WARNING: dropping {t.decode()} — colours may look different")
+            log(f"WARNING: dropping {t.decode()}: colours may look different")
     head = b"\x89PNG\r\n\x1a\n" + png_chunk(b"IHDR", struct.pack(">IIBBBBB", W, H, 8, color_type, 0, 0, 0))
     head += b"".join(png_chunk(t, d) for t, d in meta)
     fixed = len(head) + 12 + 12 + 2 + 2 + 4   # IDAT hdr+crc, IEND, zlib hdr, final block, adler
@@ -602,7 +602,7 @@ def _fit(a, log, prog, last_try):
         #    First try each strip alone; then pairs: strip i takes slack-x, strip j takes x.
         #    The sum of two noisy size sets leaves almost no gaps.
         slack = T - tot
-        log(f"slack after RD: {slack} B — landing on the exact byte")
+        log(f"slack after RD: {slack} B, landing on the exact byte")
         base = {k: F.cache[(k, Pchoice[k])][0] for k in range(K)}
         order = sorted(range(K), key=lambda k: -Pchoice[k])
         probes = [0]

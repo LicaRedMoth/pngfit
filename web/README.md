@@ -1,7 +1,7 @@
 # pngfit in the browser
 
-A static page that runs pngfit as WebAssembly on the visitor's machine: no upload, no server
-work, the image never leaves the computer.
+A static page that runs pngfit as WebAssembly on the visitor's machine, so the image never leaves
+the computer.
 
 | File | |
 |---|---|

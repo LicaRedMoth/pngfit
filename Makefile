@@ -1,4 +1,4 @@
-# pngfit — one C file, two system libraries.
+# pngfit: one C file, two system libraries.
 #   make            portable optimised build (what a package should ship)
 #   make native     tuned for this very CPU (-march=native), stripped
 #   make check      self-test: builds test images, verifies every output (Python 3, numpy, Pillow)

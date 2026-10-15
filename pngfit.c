@@ -1,9 +1,10 @@
-/* pngfit — make a truecolor PNG exactly N bytes with the least visible loss.
+/* pngfit: make a truecolor PNG exactly N bytes with the least visible loss.
  *
  * PNG predicts every byte from its neighbours (the filter) and DEFLATEs the
  * residual. pngfit rounds residuals to multiples of a step q. Prediction always
  * uses the already-rounded neighbours, which is what a decoder sees, so the error
- * never drifts: at most floor(q/2) per sample.
+ * never drifts: at most floor(q/2) per sample (more on the coarse steps,
+ * see dead_zone).
  *
  * Exactness comes from structure, not from modelling DEFLATE:
  *   - the image is cut into strips; each strip is compressed by libdeflate on its
@@ -12,10 +13,10 @@
  *     block), so the file size is a plain sum of strip sizes;
  *   - the last row of every strip stays lossless, so the next strip predicts from
  *     original pixels and strips never depend on each other's settings;
- *   - inside a strip pixels are ranked by local texture (visual masking); one
- *     integer P per strip says how far that ranking climbs a ladder of steps.
- *     P is the knob for rate-distortion allocation across strips and, at the
- *     end, the knob that lands the file on the exact byte.
+ *   - inside a strip pixels are ranked by local texture; one integer P per strip
+ *     says how far that ranking climbs a ladder of steps. P is the knob for
+ *     rate-distortion allocation across strips and, at the end, the knob that
+ *     lands the file on the exact byte.
  *
  * 16-bit images: PNG predicts bytes, not samples, so the ladder first rounds the
  * low bytes (error below half an 8-bit level) and only then the high bytes.
@@ -53,7 +54,7 @@
 
 #define VERSION "1.1.0"
 
-/* ------------------------------------------------------------------ basics */
+/* Basics */
 
 static double now(void)
 {
@@ -69,7 +70,7 @@ static double now(void)
 #endif
 }
 
-/* ------------------------------------------------------- platform layer */
+/* Platform layer */
 /* Paths are UTF-8 everywhere; on Windows they go through the wide-character API so
  * that names outside the ANSI code page work. */
 #ifdef _WIN32
@@ -256,9 +257,8 @@ static void *xmalloc(size_t n)
     return p;
 }
 
-/* Per-file failure: message + longjmp back to the file loop. Only the thread that
- * owns the file may fail(); pool workers never do. Thread-local, because batch mode
- * runs several files at once. */
+/* Per-file failure: a message, then longjmp back to the file loop. Thread-local, as batch mode
+ * runs several files at once; only the file's own thread may fail(), never a pool worker. */
 static _Thread_local jmp_buf fail_jmp;
 static _Thread_local char fail_msg[1024];
 
@@ -271,9 +271,8 @@ static _Noreturn void fail(const char *fmt, ...)
     longjmp(fail_jmp, 1);
 }
 
-/* Per-file arena: everything a file needs is freed in one go, also when it fails.
- * Each thread allocates from its current arena; pool workers borrow the arena of
- * the file they work for (and only allocate under that file's cache lock). */
+/* Per-file arena, freed in one go, also when the file fails. Pool workers borrow the arena of
+ * the file they work for and allocate only under that file's cache lock. */
 typedef struct Blk {
     struct Blk *next;
     max_align_t data[];
@@ -359,7 +358,7 @@ static void buf_chunk(Buf *b, const char *type, const uint8_t *data, uint32_t le
     buf_put(b, h, 4);
 }
 
-/* ------------------------------------------------------------- progress */
+/* Progress */
 
 typedef struct {
     int on, quiet, lines; /* lines: machine-readable progress for front ends (the web page) */
@@ -466,7 +465,7 @@ static void logmsg(const char *fmt, ...)
     pthread_mutex_unlock(&prog.mu);
 }
 
-/* ------------------------------------------------------------ PNG reading */
+/* PNG reading */
 
 typedef struct {
     char type[5];
@@ -788,7 +787,7 @@ static void png_decode(Png *g)
         decode_plane(g, &g->pl[i]);
 }
 
-/* ----------------------------------------------- lossless format reduction */
+/* Lossless format reduction */
 
 enum { R_16TO8 = 1, R_ALPHA = 2, R_GREY = 4 };
 
@@ -797,11 +796,8 @@ static int sample(const Png *g, const uint8_t *px, int c)
     return g->bps == 1 ? px[c] : (px[2 * c] << 8) | px[2 * c + 1];
 }
 
-/* What oxipng does first: a format that holds the very same pixels in fewer bytes.
- * 16-bit samples that are all 8-bit values (v = x * 257), an alpha channel that is
- * opaque everywhere, colour that is grey everywhere. For APNG an opaque alpha is only
- * dropped when every frame covers the whole canvas: elsewhere the canvas shows
- * through, and that stays transparent whatever the frames hold. */
+/* Formats that hold the same pixels in fewer bytes: 16-bit samples that are 8-bit (x * 257), alpha
+ * opaque everywhere, grey colour. APNG drops opaque alpha only if every frame covers the canvas. */
 static int reduce_format(Png *g)
 {
     const int C = g->C, hasA = C == 2 || C == 4, colour = C >= 3, top = g->bps == 1 ? 255 : 65535;
@@ -914,7 +910,7 @@ static uint32_t rewrite_for_reduction(const Chunk *c, int red, int oldC, int new
     return c->len;
 }
 
-/* ------------------------------------------------------------- metadata */
+/* Metadata */
 
 enum { K_COLOR = 1, K_EXIF = 2, K_XMP = 4, K_IPTC = 8, K_TEXT = 16, K_PHYS = 32, K_TIME = 64, K_OTHER = 128 };
 static const char *CAT_NAMES[] = {"color", "exif", "xmp", "iptc", "text", "phys", "time", "other"};
@@ -1024,12 +1020,10 @@ static void icc_name(const Chunk *c, char *out, size_t outn)
     }
 }
 
-/* ------------------------------------------------------- DEFLATE fragments */
+/* DEFLATE fragments */
 
-/* Compress one strip into a raw-DEFLATE fragment that concatenates with others:
- * libdeflate always ends with a BFINAL block; inflate(Z_BLOCK) finds that block's
- * header and the exact end bit (zlib's gzjoin.c trick), we clear BFINAL and append
- * an empty stored block (00 00 FF FF), exactly what Z_SYNC_FLUSH emits. */
+/* One strip as a raw-DEFLATE fragment that joins with others: inflate(Z_BLOCK) finds the header of
+ * libdeflate's BFINAL block (zlib's gzjoin.c trick); clear that bit, append an empty stored block. */
 static size_t fit_strip(struct libdeflate_compressor *comp, const uint8_t *in, size_t n, uint8_t *out,
                         size_t cap, uint8_t *scratch)
 {
@@ -1078,7 +1072,7 @@ static size_t fit_strip(struct libdeflate_compressor *comp, const uint8_t *in, s
     return bytes;
 }
 
-/* ---------------------------------------------------------------- fitter */
+/* The fitter */
 
 typedef struct {
     int64_t R;   /* fragment bytes */
@@ -1151,11 +1145,8 @@ static inline int predict(int f, int a, int b, int c)
     }
 }
 
-/* Rounding offset of step q: a residual r becomes floor((|r| + offset) / q) steps. Fine steps round
- * to the nearest multiple (offset (q - 1) / 2, written NEAREST), which keeps the error within
- * floor(q/2). Coarse steps lean towards the prediction, a dead zone like a video encoder's: at equal
- * size, about +1 dB at 20-35 % of a photograph's size, nothing near lossless. Steps above 63 (the
- * extended ladder) stay nearest, as does everything under --max-error or in 16-bit images. */
+/* Step q turns a residual r into floor((|r| + offset) / q) steps. Steps under 9 round to the nearest
+ * (NEAREST, error within floor(q/2)); 9 to 63 lean towards the prediction, worth ~1 dB at 20-35 %. */
 #define NEAREST 0xFF
 static uint8_t dead_zone(int q)
 {
@@ -1164,9 +1155,8 @@ static uint8_t dead_zone(int q)
     return q < 11 ? 3 : (uint8_t)(7 * q / 20); /* 0.4 q, then 0.35 q */
 }
 
-/* Quantize one row with filter f, predicting from `up` and the row's own
- * already-rounded bytes. Out-of-range rounding keeps the byte exact, so the error
- * bound floor(q/2) always holds. Returns the heuristic cost log2(1+|residual|). */
+/* One row with filter f, predicting from `up` and the row's own rounded bytes; a step that would leave
+ * 0..255 keeps the byte exact. Returns the row-filter heuristic, the sum of log2(1 + |residual|). */
 static double quant_row(const Fit *F, int W, const uint8_t *src, const uint8_t *up, const uint8_t *rung,
                         int lossless, int f, uint8_t *rec, uint8_t *res)
 {
@@ -1439,7 +1429,7 @@ static Res eval(Fit *F, int k, int64_t P, int seed, Work *w, int *fresh)
     return r;
 }
 
-/* ---------------------------------------------------------- parallel for */
+/* Parallel for */
 
 typedef void (*TaskFn)(Fit *F, void *ctx, int i, Work *w);
 typedef struct {
@@ -1530,7 +1520,7 @@ static Res cached(Fit *F, int k, int64_t P, int seed)
     return e->r;
 }
 
-/* ---------------------------------------------------------- RD allocation */
+/* Rate-distortion allocation */
 
 typedef struct {
     int64_t P, R;
@@ -1630,7 +1620,7 @@ static int64_t best_under(Fit *F, int64_t T, int64_t *P)
     return tot;
 }
 
-/* ------------------------------------------------------------- one fit */
+/* One fit */
 
 typedef struct {
     int64_t size;  /* bytes, or -1 for percent */
@@ -1674,9 +1664,8 @@ static void build_ladder(const Opts *o, const Png *g, Fit *F, int extended)
     } else
         for (int q = 1; q <= 255; q += o->ladder_kind == 0 ? 2 : 1)
             st[n++] = q;
-    /* 8-bit: steps up to 63 (error ±31 at the top); the extended ladder, used only
-     * when a target is below that, goes on to 255. 16-bit: the low bytes take the
-     * whole list, then the high bytes climb a second time, to 63 or 255. */
+    /* 8-bit: steps up to 63 (±31), on to 255 for targets below that. 16-bit: the low bytes take the
+     * whole list, then the high bytes climb it again, to 63 or 255. */
     int top = extended ? 255 : 63, E = o->max_error;
     /* --max-error E: a step q moves a byte by at most floor(q/2); never past E */
     int lo_top = g->bps == 1 ? (o->ladder_kind == 2 && !extended ? 255 : top) : 255;
@@ -2009,9 +1998,8 @@ static void write_result(Fit *F, const Png *g, const Choice *ch, const uint8_t *
                res->psnr, maxe, maxe / 257.0, res->changed * 100);
 }
 
-/* In strip k find P whose size lies in [lo, hi] (at the level in use), either side of
- * the points known so far: start from the tightest known points around the window,
- * then bisect (size falls as P rises, roughly). Records the last bracket. */
+/* In strip k find P whose size lies in [lo, hi] at the level in use: start from the tightest known
+ * bracket on either side, then bisect (size falls as P rises, roughly). Records the last bracket. */
 static int64_t window_(Fit *F, int k, int64_t lo, int64_t hi, int64_t *probes, int64_t *brk_lo, double *brk_g,
                        char *has_brk)
 {
@@ -2102,19 +2090,16 @@ static int fit_once(const Opts *o, const Png *g, const uint8_t *head, size_t hea
     F->arena = arena;
     pthread_mutex_init(&F->mu, NULL);
     build_ladder(o, g, F, extended);
-    /* strips run through every plane in order; strips of one plane are contiguous. The
-     * last plane ends in two thin strips: landing probes on them cost a fraction of a
-     * full strip and move the size in finer steps */
+    /* strips run through the planes in order, contiguous per plane; on the two thin strips a landing
+     * probe costs a fraction of a full strip and moves the size in finer steps */
     const int LAND = 16;
     int lp = 0; /* the largest plane ends in the two thin landing strips */
     for (int p = 1; p < g->npl; p++)
         if ((int64_t)g->pl[p].W * g->pl[p].H > (int64_t)g->pl[lp].W * g->pl[lp].H)
             lp = p;
     int land = !o->no_thin && strip_h > 2 * LAND && g->pl[lp].H >= strip_h + 2 * LAND, ws = 0;
-    /* at the bottom: the last strip of a plane needs no anchor row, so the two thin
-     * strips add just one; placed in busy rows instead, their lossless anchors cost
-     * 0.2 dB on a 3000x3000 photo. If the bottom is flat and cannot take the slack, a
-     * full strip takes the bulk first (the coarse step of the landing) */
+    /* at the bottom, where they add one anchor row, not two (in busy rows those anchors cost 0.2 dB on a
+     * 3000x3000 photo); a bottom that cannot take the slack lets a full strip take the bulk first */
     if (land)
         ws = g->pl[lp].H - 2 * LAND;
     int K = 0;
@@ -2417,9 +2402,8 @@ static int fit_once(const Opts *o, const Png *g, const uint8_t *head, size_t hea
         }
         int64_t tot = best_under(F, Tx, Pc);
         if (hybrid) {
-            /* price the chosen allocation at the final level; the levels differ by a few
-             * per cent and not evenly across strips, so re-aim the exploration budget by
-             * what was measured until the final total sits just under the target */
+            /* price the allocation at the final level; levels differ by a few per cent, unevenly across
+             * strips, so re-aim the exploration budget by the miss until the total sits just under */
             int64_t best_ok = -1, *Pbest = amalloc(K * sizeof(int64_t)), *Plast = amalloc(K * sizeof(int64_t));
             for (int it = 0; it < 8; it++) {
                 F->cur = 1;
@@ -2440,9 +2424,8 @@ static int fit_once(const Opts *o, const Png *g, const uint8_t *head, size_t hea
                 }
                 if (t1 <= T && T - t1 <= (T / 500 > 4096 ? T / 500 : 4096))
                     break;
-                /* the strips' curves are sparse, so a correction as small as the miss can leave the
-                 * allocation as it was: double it until the allocation moves (no compression here,
-                 * only a choice among points already priced) */
+                /* the strips' curves are sparse, so a correction the size of the miss may not move the
+                 * allocation: double it until it does (a choice among priced points, no compression) */
                 memcpy(Plast, Pc, K * sizeof(int64_t));
                 int64_t step = (int64_t)((double)(T - t1) * tx / t1);
                 if (step == 0)
@@ -2520,12 +2503,8 @@ static int fit_once(const Opts *o, const Png *g, const uint8_t *head, size_t hea
 #define PROBE(k, P, seed) probe_(F, k, P, seed, &probes)
         const int nth = K < 2 ? K : 2; /* the thin strips (or the two cheapest) */
 
-        /* In strip k find P whose size lies in [lo, hi], either side of the current
-         * point: start from the tightest known points around the window, then bisect
-         * (size falls as P rises, roughly). Leaves the final bracket in brk_*. */
+        /* window_ and single_ with this landing's probe counter and brackets (brk_*) */
 #define WINDOW(k, lo_, hi_) window_(F, k, lo_, hi_, &probes, brk_lo, brk_g, has_brk)
-        /* exact hit in one strip: the window is a single byte; then the bracket's
-         * neighbours, nearest first, a batch per core count at once */
 #define SINGLE(k, need_) single_(F, k, need_, &probes, brk_lo, brk_g, has_brk)
 
         /* coarse step: if the thin strips cannot take the slack either way, one full strip
@@ -2564,7 +2543,7 @@ static int fit_once(const Opts *o, const Png *g, const uint8_t *head, size_t hea
                 }
             }
         }
-        /* 1. the thin strips alone */
+        /* the thin strips alone */
         for (int ii = 0; ii < nth && !landed; ii++) {
             int k = order[ii];
             int64_t P = SINGLE(k, base[k] + slack);
@@ -2574,8 +2553,8 @@ static int fit_once(const Opts *o, const Png *g, const uint8_t *head, size_t hea
                 logmsg("  landed in strip %d alone (%lld probes)", k, (long long)probes);
             }
         }
-        /* 2. pairs: strip i takes slack - x, strip j takes x; sums of two noisy size sets
-         *    leave almost no gaps. j runs over the cheap strips only */
+        /* pairs: strip i takes slack - x, strip j takes x; sums of two noisy size sets leave almost
+         * no gaps. j runs over the cheap strips only */
         for (int jj = 0; jj < K && jj < nth + 4 && !landed; jj++) {
             int j = order[jj];
             n = 0;
@@ -2618,8 +2597,8 @@ static int fit_once(const Opts *o, const Png *g, const uint8_t *head, size_t hea
                 logmsg("  landed with strips %d+%d (%lld probes)", bi, j, (long long)probes);
             }
         }
-        /* 3. reshuffled tie orders on the bracketed strips, cheapest first, walked in
-         *    parallel; then single full strips; then a wide scan */
+        /* reshuffled tie orders on the bracketed strips, cheapest first, walked in parallel;
+         * then single full strips; then a wide scan */
         for (int round = 0; round < 2 && !landed; round++) {
             if (round == 1)
                 for (int ii = nth; ii < K && ii < nth + 3 && !landed; ii++) {
@@ -2712,7 +2691,7 @@ static int64_t probe_(Fit *F, int k, int64_t P, int seed, int64_t *probes)
     return r.R;
 }
 
-/* ------------------------------------------------------------- one file */
+/* One file */
 
 static void box5(const float *in, float *out, float *tmp, int W, int H) /* scipy uniform_filter(5), 'reflect' */
 {
@@ -2770,9 +2749,8 @@ static void activity(const Png *g, Plane *pl, double mask)
     for (size_t i = 0; i < N; i++) {
         float v = m2[i] - m[i] * m[i];
         act[i] = sqrtf(v > 0 ? v : 0);
-        /* optional perceptual weighting: errors in texture count less. Off by default:
-         * measured at equal byte counts it lost up to 1.2 dB on photographs and turned
-         * ±1 into ±28 on text, whose sharp edges look like "texture" to it */
+        /* optional perceptual weighting, errors in texture counting less; off by default: at equal size it
+         * lost up to 1.2 dB on photographs and turned ±1 into ±28 on text, whose edges look like texture */
         wgt[i] = mask > 0 ? (float)(1.0 / ((1.0 + act[i] / mask) * (1.0 + act[i] / mask))) : 1.0f;
     }
     free(m);
@@ -2918,10 +2896,8 @@ static void fit_file(const Opts *o, const char *src, const char *dst, Result *re
     prog_start("analysing", 0, NULL);
     for (int p = 0; p < g.npl; p++)
         activity(&g, &g.pl[p], o->mask);
-    /* content class from the share of perfectly flat pixels: screenshots and other
-     * synthetic images want thinner strips (finer allocation, +1.3 dB on a desktop
-     * screenshot) and the final libdeflate level throughout (level 10 costs them ~2 dB);
-     * photographs want 128-row strips and can explore at level 10 for free */
+    /* content class by the share of perfectly flat pixels: synthetic images get thinner strips (+1.3 dB
+     * on a desktop screenshot) and level 12 throughout (10 costs them ~2 dB); photos explore at 10 */
     double flat = 0, all = 0;
     for (int p = 0; p < g.npl; p++) {
         size_t n2 = (size_t)g.pl[p].W * g.pl[p].H;
@@ -2972,7 +2948,7 @@ static void fit_file(const Opts *o, const char *src, const char *dst, Result *re
     arena = NULL;
 }
 
-/* ------------------------------------------------------------------ CLI */
+/* Command line */
 
 static int64_t parse_size(const char *s, double *pct)
 {
@@ -3502,9 +3478,8 @@ int main(int argc, char **argv)
 }
 
 #ifdef __EMSCRIPTEN__
-/* Web build (web/build.sh): the page's worker calls pngfit_start(); the run happens on
- * a thread of its own, so the worker stays free to pass progress lines on as they come,
- * and Module.onDone(exit code) fires when it is over. Files live in Emscripten's FS. */
+/* Web build (web/build.sh): the worker calls pngfit_start(), which runs on a thread of its own so progress
+ * lines pass on as they come; Module.onDone(exit code) fires at the end. Files live in Emscripten's FS. */
 #include <emscripten.h>
 
 typedef struct {

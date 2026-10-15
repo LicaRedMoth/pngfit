@@ -1,6 +1,5 @@
-# On a version tag (v1.0.0, ...): builds the Windows binary (self-tested on Windows) and the web
-# page from the tagged sources, and attaches them to a draft release with their checksums.
-# The draft is published by hand. Run by hand on a branch, it builds and packages only.
+# On a version tag: the Windows binary (self-tested on Windows) and the web page, built from the tag, go into
+# a draft release with checksums, published by hand. Run by hand on a branch, it only builds and packages.
 name: release
 
 on:

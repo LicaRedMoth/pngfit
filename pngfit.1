@@ -22,7 +22,7 @@ writes a standard PNG whose size is exactly
 bytes. It keeps the full resolution and truecolor, and gives up as little
 precision as it can: PNG filter residuals are rounded to multiples of a step,
 textured pixels first, flat ones last, with the byte budget spread over the image
-by rate\(endistortion optimisation. The exact size comes from compressing strips of
+by rate\-distortion optimisation. The exact size comes from compressing strips of
 the image independently and stitching the DEFLATE fragments into one stream, so
 the file size is a plain sum that can be steered to the byte.
 .PP
@@ -79,13 +79,13 @@ libdeflate level 10: on photographs about three times faster at practically the
 same quality; on screenshots it costs about 2 dB.
 .TP
 .BI \-\-level " N"
-libdeflate level for the final result, 1\(en12 (default 12).
+libdeflate level for the final result, 1 to 12 (default 12).
 .TP
 .BI \-\-explore\-level " N"
 Level for the rough part of the search on photographs (default 10).
 .TP
 .BI \-\-filter " N"
-Base PNG filter 0\(en4 (default: probe).
+Base PNG filter 0 to 4 (default: probe).
 .TP
 .BI \-\-row\-switch " F"
 A row leaves the base filter only if another is cheaper by fraction \fIF\fR
@@ -110,7 +110,7 @@ up) lean towards the prediction, a dead zone that buys about 1 dB at a fifth to 
 photograph's lossless size; with \fB\-e\fR, or in 16\-bit images, every step is nearest anyway.
 .TP
 .BI \-\-rounds " N"
-Rate\(endistortion refinement rounds (default 4).
+Rate\-distortion refinement rounds (default 4).
 .TP
 .BR \-j ", " \-\-jobs " " \fIN\fR
 Worker threads in total (default: all cores).

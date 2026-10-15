@@ -142,10 +142,8 @@ function finish(m) {
   showDiff();
 }
 
-// The difference view: for every pixel the largest change in any channel, scaled so the
-// largest change in the image is the brightest colour, black where nothing changed. The images
-// are decoded without colour management, so a dropped colour profile does not show up as a
-// change, and pixels transparent in both are left black.
+// The difference view: per pixel the largest change in any channel, the image's largest the brightest.
+// Decoded without colour management, so a dropped profile is no change; pixels transparent in both stay black.
 let diffFor = null; // the result the canvas shows
 const HEAT = (() => { // black, violet, red, orange, pale yellow
   const stops = [[0, 0, 4], [87, 16, 110], [188, 55, 84], [249, 142, 9], [252, 255, 164]];
@@ -225,10 +223,8 @@ async function showDiff() {
 }
 $('diffmode').addEventListener('change', showDiff);
 
-// Fitted, the whole image is on screen: as wide as the panel, no taller than 75 % of the window.
-// At 1:1 it has its own size: the window shrinks around a small image and scrolls over a large
-// one. Either way the viewer is centred and no wider than the image. Pixels are drawn as squares
-// only when enlarged; a reduced image is smoothed.
+// Fitted: the whole image on screen, no taller than 75 % of the window. At 1:1: its own size, a small
+// image centred, a large one scrolling. Pixels show as squares only when enlarged.
 function layout() {
   const img = $('before'), stage = $('stage'), c = $('compare'), viewer = $('viewer');
   const zoomed = $('zoom').checked, w = img.naturalWidth, h = img.naturalHeight;

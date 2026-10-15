@@ -16,7 +16,7 @@ Bandcamp, for one, takes a cover of up to 10 MiB (10 485 760 bytes) and serves t
 listeners. When a lossless PNG is 12 MB, the usual choices are a palette (pngquant), a downscale,
 or JPEG. pngfit takes another route: it keeps the full resolution and full truecolor, gives up the
 smallest possible amount of precision where the eye cannot see it, and writes a valid PNG of
-**exactly** the size you ask for: not "about", not "under", the very byte.
+exactly the size you ask for, to the byte.
 
 ```
 $ pngfit cover.png cover_bandcamp.png -s 10MiB -e 1
@@ -36,11 +36,7 @@ A 3000×3000 photo, a 12.12 MB lossless PNG, lands on 10 485 760 bytes in about 
 2011 dual-core laptop, with all its metadata. `-e 1` makes it a promise: no pixel moved by more
 than 1 level out of 255. Any PNG decoder opens the result; nothing about it is non-standard.
 
-
-
 https://github.com/user-attachments/assets/a7b442ad-b65d-4ba5-b3e1-76cce99d80d9
-
-
 
 ![What each byte buys on a photograph](docs/img/rd_photographic.png)
 
@@ -48,8 +44,8 @@ Near lossless, pngfit is the better tool. At Bandcamp's 10 MiB (86.5 % of the so
 no pixel by more than ±1 at 54.9 dB; JPEG cannot even get there (quality 100 is 69 % of the size
 and still moves a pixel by 5 levels), and WebP and AVIF never get below ±27 and ±9. Below about
 65 % the picture flips for the average error: transform codecs suit photographs better than
-prediction does, and at 20 % of the size JPEG and AVIF are 4–7 dB ahead. pngfit's worst pixel stays the
-smallest at every size, though: ±7 at 20 %, where JPEG and AVIF are at ±26 and ±28.
+prediction does, and at 20 % of the size JPEG and AVIF are 4 to 7 dB ahead. pngfit's worst pixel
+stays the smallest at every size, though: ±7 at 20 %, where JPEG and AVIF are at ±26 and ±28.
 
 ## How it works
 
@@ -63,7 +59,7 @@ prediction residuals. pngfit rounds those residuals to multiples of a step *q*:
   than q = 2;
 * the coarse steps, 9 and up, lean towards the prediction instead of rounding to the nearest
   multiple: a dead zone, as video encoders use. Fewer, smaller residuals cost fewer bytes than the
-  extra error is worth: at the same size this gains about 1 dB at 20–35 % of a photograph's
+  extra error is worth: at the same size this gains about 1 dB at 20 to 35 % of a photograph's
   lossless size (up to 4 dB on smooth ones) and changes nothing near lossless. Under `-e`, and in
   16-bit images, every step stays nearest and the ⌊q/2⌋ bound holds (`--nearest` turns it off);
 * textured pixels (wood grain, noise, edges) are coarsened first, flat areas last
@@ -77,32 +73,32 @@ Landing on an exact byte count needs no model of DEFLATE. It comes from structur
 
 1. **Independent strips.** The image is cut into strips: 128 rows for photographs, 64 for
    screenshots and other flat images (told apart by the share of perfectly flat pixels; thinner
-   strips let the budget follow text and UI elements, +1.2 dB on a desktop screenshot). Each is compressed by
-   libdeflate on its own; the final-block bit of every fragment is cleared (found with zlib's
+   strips let the budget follow text and UI elements, +1.2 dB on a desktop screenshot). Each is
+   compressed by libdeflate on its own; the final-block bit of every fragment is cleared (found with zlib's
    `inflate(Z_BLOCK)`, the trick from zlib's `gzjoin.c`) and the fragment is byte-aligned with an
    empty stored block. Fragments concatenate into one valid zlib stream, so **file size is a plain
    sum of strip sizes**.
 2. **Anchor rows.** The last row of every strip stays lossless, so the next strip predicts from
    original pixels and strips never depend on each other's settings.
-3. **Rate–distortion allocation.** One integer per strip says how far its pixels climb the
+3. **Rate-distortion allocation.** One integer per strip says how far its pixels climb the
    ladder. A Lagrangian search, refined over a few rounds and topped up greedily, spends the
    byte budget where it buys the most quality.
 4. **Exact landing.** The few hundred bytes left over are spent by moving one strip pixel by
    pixel until the sum matches. Two thin 16-row strips at the bottom of the image do most of
-   this: a probe on them costs an eighth of a full strip and moves the size in finer
-   steps, and when they cannot take all of the slack, one full strip first takes the bulk. If a single strip skips the target (libdeflate re-splits blocks
-   and sizes jump), a *pair* of strips is used: strip *i* takes `slack − x`, strip *j* takes `x`,
-   and sums of two noisy size sets have virtually no gaps (only pairs about as good as the
-   allocation they replace count). Rarer fallbacks: reshuffling pixels of equal texture, a wide
-   scan, and finally thinner strips.
+   this: a probe on them costs an eighth of a full strip and moves the size in finer steps, and
+   when they cannot take all of the slack, one full strip first takes the bulk. If a single strip
+   skips the target (libdeflate re-splits blocks and sizes jump), a *pair* of strips is used:
+   strip *i* takes `slack − x`, strip *j* takes `x`, and sums of two noisy size sets have virtually
+   no gaps (only pairs about as good as the allocation they replace count). Rarer fallbacks:
+   reshuffling pixels of equal texture, a wide scan, and finally thinner strips.
 
-For photographs the rough part of the search (the step ladder and the rate–distortion rounds) runs
+For photographs the rough part of the search (the step ladder and the rate-distortion rounds) runs
 at libdeflate level 10, which on photographs sizes strips almost exactly as level 12 does at a
 fraction of the cost; the allocation is then priced at level 12 and re-aimed until the final
 total sits just under the target. Screenshots stay at level 12 throughout.
 
 The price of exactness is the strip overhead: `oxipng -o max` can squeeze a pngfit output by
-another 0.1–0.2 %, and that is all it finds.
+another 0.1 to 0.2 %, and that is all it finds.
 
 **What was tried and dropped.** Weighting errors by local texture (visual masking, as video
 encoders do) sounds right and measured wrong: at identical byte counts it lost up to 1.2 dB on
@@ -127,7 +123,7 @@ its lossless size keeps every sample within ±5 of 65535.
 (Go) quantises the residuals of PNG's Average filter, and its successor
 [pngloss](https://github.com/foobaz/pngloss) (C) adds dithering and a filter choice per row. Both
 take a strength setting and let the size fall where it may. pngfit's part is the size: it lands
-on an exact byte count and spreads those bytes over the image by rate–distortion, and it keeps
+on an exact byte count and spreads those bytes over the image by rate-distortion, and it keeps
 16-bit samples and animation.
 
 ## Install
@@ -188,14 +184,14 @@ own lossless size. `0` means "as small as you can".
 | `--lossy-alpha` | allow rounding in the alpha channel too (kept exact by default) |
 | `--alpha` | colour under fully transparent pixels is free: no bytes spent on it (off by default) |
 | `--no-reduce` | keep the source format even when a smaller one holds the same pixels |
-| `--filter N` | base PNG filter 0–4 (default: probe) |
+| `--filter N` | base PNG filter 0 to 4 (default: probe) |
 | `--row-switch F` | a row leaves the base filter only if another is cheaper by fraction F (default: probe) |
 | `--ladder` | `odd` (default), `all`, or an explicit list like `1,3,5,9` |
 | `--mask M` | weight errors by local texture (visual masking), e.g. `4` (default: off) |
 | `--level N` | libdeflate level (default 12) |
 | `--fast` | level 10: on photographs the same quality (−0.02 dB) about 3× faster; on screenshots it costs about 2 dB |
 | `--strip-rows N` | rows per independent strip (default: 128 for photographs, 64 for flat synthetic images) |
-| `--rounds N` | rate–distortion refinement rounds (default 4) |
+| `--rounds N` | rate-distortion refinement rounds (default 4) |
 | `--nearest` | round every step to the nearest multiple, as 1.0 did (no dead zone on coarse steps) |
 | `-j, --jobs N` | worker threads in total (default: all cores) |
 | `-P, --parallel N` | batch mode: files encoded at once (default: as many as threads allow) |
@@ -204,7 +200,7 @@ own lossless size. `0` means "as small as you can".
 
 **A hard cap on the error.** By default pngfit minimises the average error, which now and then
 lets a pixel move by 2 where the rest move by at most 1. `-e N` forbids anything beyond N: on the
-cover above `-e 1` cost nothing measurable (53.78 dB either way). If the target cannot be reached
+cover above, at 10 MB, `-e 1` cost nothing measurable (53.78 dB either way). If the target cannot be reached
 within N, pngfit says so and writes the smallest file that stays within it. `-e 0` is lossless.
 
 **Batch mode** encodes several files at once (`-P`, by default as many as there are threads, each
@@ -246,7 +242,7 @@ without the flag, still left them at ±2.
 ![What each byte buys on a screenshot](docs/img/rd_synthetic.png)
 
 Screenshots are a different world. Lossy codecs struggle with text and flat colour: JPEG needs two to
-four times the lossless PNG size for 50–58 dB, and WebP's lossy mode stops at 36 dB whatever the
+four times the lossless PNG size for 50 to 58 dB, and WebP's lossy mode stops at 36 dB whatever the
 quality, because it always halves the colour resolution and smears coloured text. AVIF at full
 colour is the strong one, 57.7 dB at 66 % of the size. pngfit owns the range just under lossless:
 67.7 dB at 90 % (±2), 62.9 dB at 80 % (±1). Below about 75 % AVIF wins on the average; below about
@@ -286,7 +282,7 @@ minimises the average error and lets a few pixels go further; `-e N` caps that.
 
 **Robustness.** The whole official PNG test suite (176 files, many broken on purpose): no crash.
 63 land exactly; 13 are 32×32 images whose headers alone leave no room for 90 %, which get the
-smallest file and a warning; 100 are refused with a reason (palette, 1–4-bit, tRNS, bad CRC,
+smallest file and a warning; 100 are refused with a reason (palette, 1- to 4-bit, tRNS, bad CRC,
 not a PNG at all). A 20-frame APNG lands exactly at both targets.
 
 ![Benchmark on photographs](docs/img/bench_photographic.png)
@@ -323,7 +319,7 @@ deploying it on a static host.
   images too, since rounding could punch or fill transparent holes. Nothing is ever converted
   behind your back.
 * Slow by design: every candidate is really compressed at libdeflate's level 12, which is where
-  almost all of the time goes. A 3000×3000 photo takes 2–3 minutes on a 2011 dual-core. Level 10
+  almost all of the time goes. A 3000×3000 photo takes 2 to 4 minutes on a 2011 dual-core. Level 10
   (`--fast`) still uses libdeflate's near-optimal parser and is about 3× faster; on photographs it
   lands within 0.03 dB of level 12, on screenshots it loses about 2 dB. Level 9 and below switch to
   lazy matching and lose 0.8 dB or more even on photographs.
